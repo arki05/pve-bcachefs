@@ -26,8 +26,16 @@ use constant {
 #
 #   snapshots are read-only sibling subvolumes: `<subvolume-dir>@<snapname>`
 
+# Declare the storage API version of the host we run on, clamped to the
+# window this plugin is known to work with (the interfaces used here are
+# stable across it). PVE::Storage is fully loaded before Custom/ plugins,
+# so its APIVER constant is available.
+my $API_MIN = 13;
+my $API_MAX = 15;
+
 sub api {
-    return 15;
+    my $host = eval { PVE::Storage::APIVER() } // $API_MAX;
+    return $host < $API_MIN ? $API_MIN : $host > $API_MAX ? $API_MAX : $host;
 }
 
 sub type {
@@ -354,7 +362,7 @@ sub clone_image {
     }
 
     # snapshots are writable by default - a clone is simply a snapshot
-    $class->bcachefs_cmd(['subvolume', 'snapshot', '--', $subvol, $newsubvol]);
+    $class->bcachefs_cmd(['subvolume', 'snapshot', $subvol, $newsubvol]);
 
     return $newvolname;
 }
@@ -394,7 +402,7 @@ sub alloc_image {
             . " subvolumes is not implemented yet - creating unsized subvolume\n";
     }
 
-    $class->bcachefs_cmd(['subvolume', 'create', '--', $subvol]);
+    $class->bcachefs_cmd(['subvolume', 'create', $subvol]);
 
     eval {
         if ($fmt eq 'raw') {
@@ -407,7 +415,7 @@ sub alloc_image {
     };
 
     if (my $err = $@) {
-        eval { $class->bcachefs_cmd(['subvolume', 'delete', '--', $subvol]); };
+        eval { $class->bcachefs_cmd(['subvolume', 'delete', $subvol]); };
         warn $@ if $@;
         die $err;
     }
@@ -461,7 +469,7 @@ sub free_image {
     );
 
     for my $vol (@snapshot_vols, $subvol) {
-        $class->bcachefs_cmd(['subvolume', 'delete', '--', $vol]);
+        $class->bcachefs_cmd(['subvolume', 'delete', $vol]);
     }
     # cleanup: don't leave empty $vmid dirs around after the last image is gone
     my $dir = dirname($subvol);
@@ -513,7 +521,7 @@ sub volume_snapshot {
         $snap_path = raw_file_to_subvol($snap_path);
     }
 
-    $class->bcachefs_cmd(['subvolume', 'snapshot', '--read-only', '--', $path, $snap_path]);
+    $class->bcachefs_cmd(['subvolume', 'snapshot', '--read-only', $path, $snap_path]);
     return undef;
 }
 
@@ -543,10 +551,10 @@ sub volume_snapshot_rollback {
     # create the new (writable) state first, then atomically exchange it with
     # the current subvolume, so a failure can never leave us without a volume
     my $tmp_path = "$path.tmp.$$";
-    $class->bcachefs_cmd(['subvolume', 'snapshot', '--', $snap_path, $tmp_path]);
+    $class->bcachefs_cmd(['subvolume', 'snapshot', $snap_path, $tmp_path]);
     my $ok = PVE::Tools::renameat2(-1, $tmp_path, -1, $path, &PVE::Tools::RENAME_EXCHANGE);
 
-    eval { $class->bcachefs_cmd(['subvolume', 'delete', '--', $tmp_path]) };
+    eval { $class->bcachefs_cmd(['subvolume', 'delete', $tmp_path]) };
     warn "failed to remove '$tmp_path' subvolume: $@" if $@;
 
     if (!$ok) {
@@ -571,7 +579,7 @@ sub volume_snapshot_delete {
         $path = raw_file_to_subvol($path);
     }
 
-    $class->bcachefs_cmd(['subvolume', 'delete', '--', $path]);
+    $class->bcachefs_cmd(['subvolume', 'delete', $path]);
 
     return undef;
 }

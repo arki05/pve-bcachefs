@@ -71,6 +71,18 @@ exact-match and refuses to run against unknown code.
 <path>/images/<vmid>/<volume>@<snapname>                  snapshots (read-only subvolumes)
 ```
 
+## Tested (PVE 9.2, bcachefs-tools/dkms 1.38.8, storage APIVER 13-15)
+
+Unpatched: folder container create (size 0), snapshot / rollback / delete
+(instant, with guest fs freeze), full clone of current state, template +
+linked clone, sized fallback (raw+ext4 in snapshottable subvolume), extra
+mountpoints, move-volume between storages, vzdump (stop/suspend) + restore,
+vztmpl/backup content, per-storage IO options incl. tiering targets.
+
+With `patch-pve-container.pl` additionally: sized containers as folders,
+clone from snapshot, and snapshot-mode vzdump (~1s freeze; upstream btrfs
+cannot do this).
+
 ## Not (yet) supported
 
 - VM disk images (LXC only by design, for now)

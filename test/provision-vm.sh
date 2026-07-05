@@ -14,7 +14,10 @@ Signed-By: /usr/share/keyrings/proxmox-archive-keyring.gpg
 EOF
 
 echo "=== bcachefs repo ==="
-curl -fsSL https://apt.bcachefs.org/bcachefs.asc -o /etc/apt/keyrings/bcachefs.asc
+# key is expected to be pre-seeded (copy from a machine that already has the
+# repo); fall back to download for convenience
+[ -s /etc/apt/keyrings/bcachefs.asc ] \
+    || curl -fsSL https://apt.bcachefs.org/bcachefs.asc -o /etc/apt/keyrings/bcachefs.asc
 echo "deb [signed-by=/etc/apt/keyrings/bcachefs.asc] https://apt.bcachefs.org/trixie bcachefs-tools-release main" \
     > /etc/apt/sources.list.d/bcachefs.list
 
@@ -28,14 +31,24 @@ DEBIAN_FRONTEND=noninteractive apt-get install -y bcachefs-tools bcachefs-kernel
 modprobe bcachefs
 bcachefs version
 
-echo "=== format multi-device bcachefs (2x hdd + 1x ssd) ==="
-bcachefs format --force \
-    --label=hdd.hdd1 /dev/sdb \
-    --label=hdd.hdd2 /dev/sdc \
-    --label=ssd /dev/sdd
+echo "=== format multi-device bcachefs (2x 8G hdd + 1x 4G ssd) ==="
+# blank disks only, identified by size: 4G -> ssd tier, 8G -> hdd tier
+SSD_DEV=$(lsblk -bdno NAME,SIZE,TYPE | awk '$3=="disk" && $2==4294967296 {print "/dev/"$1}')
+HDD_DEVS=$(lsblk -bdno NAME,SIZE,TYPE | awk '$3=="disk" && $2==8589934592 {print "/dev/"$1}')
+[ -n "$SSD_DEV" ] && [ "$(echo "$HDD_DEVS" | wc -l)" = 2 ] || {
+    echo "unexpected disk layout" >&2; lsblk; exit 1; }
+
+i=0
+HDD_ARGS=()
+for dev in $HDD_DEVS; do
+    i=$((i + 1))
+    HDD_ARGS+=("--label=hdd.hdd$i" "$dev")
+done
+
+bcachefs format --force "${HDD_ARGS[@]}" --label=ssd "$SSD_DEV"
 
 mkdir -p /mnt/tank
-UUID=$(bcachefs show-super /dev/sdb | grep -oP '^External UUID:\s+\K\S+')
+UUID=$(bcachefs show-super "$SSD_DEV" | grep -oP '^External UUID:\s+\K\S+')
 echo "UUID=$UUID /mnt/tank bcachefs rw,noatime 0 0" >> /etc/fstab
 mount /mnt/tank
 df -h /mnt/tank

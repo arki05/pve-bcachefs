@@ -9,12 +9,13 @@ DEST=/usr/share/perl5/PVE/Storage/Custom
 install -D -m 0644 src/PVE/Storage/Custom/BcachefsPlugin.pm "$DEST/BcachefsPlugin.pm"
 
 # compile check before restarting anything (PVE::Storage loads Custom/ plugins;
-# loading the plugin directly instead would hit plugin-registration ordering)
-perl -e 'use PVE::Storage;' || {
-    echo "plugin failed to compile, removing" >&2
+# loading the plugin directly instead would hit plugin-registration ordering).
+# Load errors of Custom/ plugins are only warned about, so grep for them.
+if perl -e 'use PVE::Storage;' 2>&1 | grep -i 'BcachefsPlugin'; then
+    echo "plugin failed to load, removing" >&2
     rm -f "$DEST/BcachefsPlugin.pm"
     exit 1
-}
+fi
 
 systemctl try-reload-or-restart pvedaemon pvestatd pveproxy pvescheduler
 
