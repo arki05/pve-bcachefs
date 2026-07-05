@@ -53,11 +53,11 @@ my $apply = sub {
 # --- patch 1: alloc_disk ----------------------------------------------------
 
 my $p1_old =
-    q{if ($size_kb > 0 && !($scfg->{type} eq 'btrfs' && $scfg->{quotas})) {};
+    q~if ($size_kb > 0 && !($scfg->{type} eq 'btrfs' && $scfg->{quotas})) {~;
 my $p1_new =
-    q{if ($size_kb > 0 && !($scfg->{type} eq 'btrfs' && $scfg->{quotas}) && $scfg->{type} ne 'bcachefs') {};
+    q~if ($size_kb > 0 && !($scfg->{type} eq 'btrfs' && $scfg->{quotas}) && $scfg->{type} ne 'bcachefs') {~;
 
-$apply->('patch 1 (alloc_disk)', $p1_old, $p1_new, q{$scfg->{type} ne 'bcachefs'});
+$apply->('patch 1 (alloc_disk)', $p1_old, $p1_new, q~$scfg->{type} ne 'bcachefs'~);
 
 # --- patch 2: mountpoint_mount ----------------------------------------------
 
