@@ -71,6 +71,14 @@ exact-match and refuses to run against unknown code.
 <path>/images/<vmid>/<volume>@<snapname>                  snapshots (read-only subvolumes)
 ```
 
+## VM images
+
+Enable `images` content on a storage to put VM disks on bcachefs: raw images,
+each in its own subvolume (btrfs-plugin layout), so VM snapshots (incl. RAM
+via vmstate volumes), rollback, templates and instant linked clones are native
+subvolume operations. For write-heavy VMs consider a dedicated storage with
+`bcachefs-nocow 1` (disables COW/checksums/compression for those images).
+
 ## Tested (PVE 9.2, bcachefs-tools/dkms 1.38.8, storage APIVER 13-15)
 
 Unpatched: folder container create (size 0), snapshot / rollback / delete
@@ -83,9 +91,14 @@ With `patch-pve-container.pl` additionally: sized containers as folders,
 clone from snapshot, and snapshot-mode vzdump (~1s freeze; upstream btrfs
 cannot do this).
 
+VM lifecycle: create, live snapshot with vmstate, rollback with RAM restore,
+full clone, template + linked clone, resize, destroy.
+
 ## Not (yet) supported
 
-- VM disk images (LXC only by design, for now)
-- size enforcement / quotas on subvolumes
+- size enforcement / quotas on subvolumes — blocked upstream: bcachefs 1.38.8
+  implements no quotactl interface and rejects project IDs (verified
+  empirically, even on a fresh fs formatted with `--prjquota=1`); revisit
+  after bcachefs re-lands quotas on the new disk-accounting infrastructure
 - send/receive-based migration (bcachefs has none; falls back to tar/rsync)
-- `snapshot-as-volume-chain`, rename_snapshot
+- `snapshot-as-volume-chain`, rename_snapshot, qcow2

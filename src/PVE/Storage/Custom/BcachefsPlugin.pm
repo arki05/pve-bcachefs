@@ -46,15 +46,20 @@ sub plugindata {
     return {
         content => [
             {
+                images => 1,
                 rootdir => 1,
                 vztmpl => 1,
+                iso => 1,
                 backup => 1,
                 snippets => 1,
                 none => 1,
             },
             { rootdir => 1 },
         ],
-        format => [{ subvol => 1, raw => 1 }, 'subvol'],
+        # 'raw' default matters for VM disks (containers always request their
+        # format explicitly); a raw image lives in its own subvolume so it
+        # snapshots exactly like a container subvolume does
+        format => [{ raw => 1, subvol => 1 }, 'raw'],
         'sensitive-properties' => {},
     };
 }
@@ -99,6 +104,12 @@ sub properties {
             type => 'string',
             pattern => '[A-Za-z0-9._-]+',
         },
+        'bcachefs-nocow' => {
+            description => "Disable copy-on-write for volumes on this storage (also disables"
+                . " data checksumming and compression for them). Reduces write amplification"
+                . " for VM images.",
+            type => 'boolean',
+        },
     };
 }
 
@@ -122,6 +133,7 @@ sub options {
         'bcachefs-foreground-target' => { optional => 1 },
         'bcachefs-background-target' => { optional => 1 },
         'bcachefs-promote-target' => { optional => 1 },
+        'bcachefs-nocow' => { optional => 1 },
     };
 }
 
@@ -156,6 +168,7 @@ my $fs_option_map = {
     'bcachefs-foreground-target' => 'foreground_target',
     'bcachefs-background-target' => 'background_target',
     'bcachefs-promote-target' => 'promote_target',
+    'bcachefs-nocow' => 'nocow',
 };
 
 # Apply the configured IO-path options to the storage base directory. bcachefs
