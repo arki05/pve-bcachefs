@@ -94,6 +94,11 @@ cannot do this).
 VM lifecycle: create, live snapshot with vmstate, rollback with RAM restore,
 full clone, template + linked clone, resize, destroy.
 
+Additionally the [pve-storage-test-lab](https://github.com/arki05/pve-storage-test-lab)
+pytest suite passes clean (44 passed, 11 skipped = multi-node/shared-only):
+lifecycle, snapshot semantics, resize, storage moves, backup/restore
+compositions, data integrity under fio load, regressions.
+
 ## Not (yet) supported
 
 - size enforcement / quotas on subvolumes — blocked upstream: bcachefs 1.38.8
