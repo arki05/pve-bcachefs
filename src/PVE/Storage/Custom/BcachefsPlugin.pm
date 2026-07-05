@@ -160,6 +160,34 @@ my sub assert_bcachefs($) {
         if getfsmagic($path) != BCACHEFS_MAGIC;
 }
 
+# The nominal size of a subvolume volume is tracked in an xattr on the
+# subvolume root (there is nothing to enforce it against until bcachefs
+# regains quota support, but PVE relies on volume_size_info for resize
+# arithmetic and display). The 'trusted' namespace keeps it out of reach
+# of (unprivileged) container root.
+my $SIZE_XATTR = 'trusted.pve.size';
+
+my sub set_size_xattr($$) {
+    my ($path, $size_bytes) = @_;
+    my $value = "$size_bytes";
+    if (
+        0 != syscall(
+            &PVE::Syscall::SYS_setxattr, $path, $SIZE_XATTR, $value, length($value), 0,
+        )
+    ) {
+        die "failed to set size attribute on '$path' - $!\n";
+    }
+}
+
+my sub get_size_xattr($) {
+    my ($path) = @_;
+    my $buf = pack('x32');
+    my $len = syscall(&PVE::Syscall::SYS_getxattr, $path, $SIZE_XATTR, $buf, 32);
+    return undef if $len <= 0;
+    my $value = substr($buf, 0, $len);
+    return $value =~ /^(\d+)$/ ? $1 : undef;
+}
+
 my $fs_option_map = {
     'bcachefs-compression' => 'compression',
     'bcachefs-background-compression' => 'background_compression',
@@ -409,16 +437,13 @@ sub alloc_image {
         $path = "$subvol/disk.raw";
     }
 
-    if ($fmt eq 'subvol' && !!$size) {
-        # TODO: enforce via bcachefs project quotas once verified to work
-        warn "size ${size}k requested for '$name', but size enforcement for bcachefs"
-            . " subvolumes is not implemented yet - creating unsized subvolume\n";
-    }
-
     $class->bcachefs_cmd(['subvolume', 'create', $subvol]);
 
     eval {
-        if ($fmt eq 'raw') {
+        if ($fmt eq 'subvol' && !!$size) {
+            # TODO: enforce via bcachefs quotas once they return upstream
+            set_size_xattr($subvol, $size * 1024);
+        } elsif ($fmt eq 'raw') {
             sysopen my $fh, $path, O_WRONLY | O_CREAT | O_EXCL
                 or die "failed to create raw file '$path' - $!\n";
             truncate($fh, $size * 1024)
@@ -500,7 +525,8 @@ sub volume_size_info {
 
     if (defined($format) && $format eq 'subvol') {
         my $ctime = (stat($path))[10];
-        my ($used, $size) = (0, 0);
+        my $size = get_size_xattr($path) // 0;
+        my $used = 0;
         return wantarray ? ($size, 'subvol', $used, undef, $ctime) : $size;
     }
 
@@ -512,7 +538,12 @@ sub volume_resize {
 
     my $format = ($class->parse_volname($volname))[6];
     if ($format eq 'subvol') {
-        die "cannot resize unsized bcachefs subvolume\n";
+        die "resizing a snapshot is not supported\n" if $snapname;
+        # record the new nominal size; nothing enforces it until bcachefs
+        # regains quota support
+        my $path = $class->filesystem_path($scfg, $volname);
+        set_size_xattr($path, $size);
+        return undef;
     }
 
     return PVE::Storage::Plugin::volume_resize(@_);
@@ -668,7 +699,7 @@ sub list_images {
             ($size, undef, $used, $parent, $ctime) =
                 PVE::Storage::Plugin::file_size_info("$fn/disk.raw", undef, $format);
         } else {
-            ($used, $size) = (0, 0);
+            ($size, $used) = (get_size_xattr($fn) // 0, 0);
             $format = 'subvol';
         }
         next if !defined($size);
