@@ -86,7 +86,7 @@ my $p2_new = <<'EOF';
 EOF
 
 $apply->('patch 2 (mountpoint_mount)', $p2_old, $p2_new,
-    'points at it, so a read-only bind mount suffices');
+    'read-only bind mount suffices');
 
 # -----------------------------------------------------------------------------
 
