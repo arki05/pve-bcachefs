@@ -107,3 +107,9 @@ compositions, data integrity under fio load, regressions.
   after bcachefs re-lands quotas on the new disk-accounting infrastructure
 - send/receive-based migration (bcachefs has none; falls back to tar/rsync)
 - `snapshot-as-volume-chain`, rename_snapshot, qcow2
+
+## License
+
+AGPL-3.0-or-later (see [LICENSE](LICENSE)). `BcachefsPlugin.pm` is a derivative
+work of Proxmox's `PVE::Storage::BTRFSPlugin` (part of pve-storage, AGPL-3.0+),
+so it carries the same license.

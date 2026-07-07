@@ -1,3 +1,9 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2026 Julius Arkenberg
+#
+# Derived from PVE::Storage::BTRFSPlugin (part of pve-storage, AGPL-3.0+);
+# see LICENSE.
+
 package PVE::Storage::Custom::BcachefsPlugin;
 
 use strict;
