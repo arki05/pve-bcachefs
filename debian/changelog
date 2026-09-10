@@ -1,4 +1,4 @@
-pve-bcachefs (0.1.0) trixie; urgency=medium
+pve-bcachefs (0.0.1) trixie; urgency=medium
 
   * Initial packaged release.
   * bcachefs storage plugin with subvolume container rootfs, native snapshots,
