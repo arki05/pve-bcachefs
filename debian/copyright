@@ -1,0 +1,27 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: pve-bcachefs
+Source: https://github.com/arki05/pve-bcachefs
+
+Files: *
+Copyright: 2026 Julius Arkenberg
+License: AGPL-3.0-or-later
+
+Files: src/PVE/Storage/Custom/BcachefsPlugin.pm
+Copyright: 2026 Julius Arkenberg
+           Proxmox Server Solutions GmbH
+Comment: Derived from PVE::Storage::BTRFSPlugin, part of pve-storage.
+License: AGPL-3.0-or-later
+
+License: AGPL-3.0-or-later
+ This program is free software: you can redistribute it and/or modify it under
+ the terms of the GNU Affero General Public License as published by the Free
+ Software Foundation, either version 3 of the License, or (at your option) any
+ later version.
+ .
+ This program is distributed in the hope that it will be useful, but WITHOUT
+ ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+ FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+ details.
+ .
+ On Debian systems, the complete text of the GNU Affero General Public License
+ version 3 can be found in /usr/share/common-licenses/AGPL-3.

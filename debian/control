@@ -1,0 +1,32 @@
+Source: pve-bcachefs
+Section: admin
+Priority: optional
+Maintainer: Julius Arkenberg <julius@rkenberg.de>
+Rules-Requires-Root: no
+Build-Depends:
+ debhelper-compat (= 13),
+ perl,
+Standards-Version: 4.7.0
+Homepage: https://github.com/arki05/pve-bcachefs
+
+Package: pve-bcachefs
+Architecture: all
+Depends:
+ ${misc:Depends},
+ ${perl:Depends},
+ bcachefs-tools (>= 1.39),
+ libpve-storage-perl,
+ pve-container,
+Description: bcachefs storage plugin for Proxmox VE
+ Stores container rootfs volumes as bcachefs subvolumes - folders rather than
+ image files - so snapshots, rollbacks and clones are native bcachefs
+ operations, and applies per-storage bcachefs IO policy (compression, replicas,
+ tiering targets, checksums) straight from storage.cfg.
+ .
+ Container sizes are enforced with bcachefs project quotas where the filesystem
+ supports them, falling back to ext4-in-a-raw-image where it does not.
+ .
+ This package also patches PVE::LXC so that sized container rootfs volumes can
+ be placed as subvolumes, and re-applies that patch after pve-container
+ upgrades. Set APPLY_LXC_PATCH=no in /etc/default/pve-bcachefs to install the
+ storage plugin without touching pve-container.

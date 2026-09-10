@@ -1,0 +1,3 @@
+# pve-container upgrades rewrite PVE/LXC.pm, silently dropping our patch.
+# Re-apply whenever anything under the PVE perl tree changes.
+interest-noawait /usr/share/perl5/PVE

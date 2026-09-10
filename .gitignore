@@ -1,1 +1,8 @@
 reference/
+debian/pve-bcachefs/
+debian/.debhelper/
+debian/files
+debian/debhelper-build-stamp
+*.deb
+*.buildinfo
+*.changes
