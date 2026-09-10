@@ -609,7 +609,6 @@ my sub apply_fs_options {
         next if !defined($value);
         push @args, "--$fs_option_map->{$prop}=$value";
     }
-    return if !@args;
 
     my $desired = join(' ', @args);
     my $statefile = "$path/.pve-bcachefs-options";
@@ -617,10 +616,33 @@ my sub apply_fs_options {
     chomp $current;
     return if $current eq $desired;
 
-    run_command(
-        ['bcachefs', 'set-file-option', @args, $path],
-        errmsg => "failed to apply bcachefs options on '$path'",
-    );
+    # `set-file-option` only ever sets the options it is handed, so an option
+    # dropped from storage.cfg would otherwise stay applied to the filesystem
+    # forever. Clear the previously applied set first, then re-apply.
+    #
+    # --remove-all leaves inode project ids alone, so this does not disturb the
+    # quota anchors. It does complain that it cannot drop inodes_32bit from a
+    # non-empty directory - an option this plugin never sets - without affecting
+    # its exit status, so that one line is filtered out.
+    if (length($current)) {
+        run_command(
+            ['bcachefs', 'set-file-option', '--remove-all', $path],
+            errmsg => "failed to clear bcachefs options on '$path'",
+            errfunc => sub {
+                my ($line) = @_;
+                return if $line =~ /inodes_32bit/;
+                warn "$line\n";
+            },
+        );
+    }
+
+    if (@args) {
+        run_command(
+            ['bcachefs', 'set-file-option', @args, $path],
+            errmsg => "failed to apply bcachefs options on '$path'",
+        );
+    }
+
     file_set_contents($statefile, "$desired\n");
 }
 
