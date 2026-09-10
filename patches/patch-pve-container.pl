@@ -3,7 +3,10 @@
 # Patches pve-container's LXC.pm for native bcachefs folder containers:
 #
 #   1. alloc_disk: allocate sized container rootfs as 'subvol' (folder) on
-#      bcachefs storages instead of raw+ext4-on-loop.
+#      bcachefs storages that set `bcachefs-subvol-rootfs`, instead of
+#      raw+ext4-on-loop. This mirrors what upstream already does for btrfs,
+#      which uses a folder only when the storage declares `quotas` - i.e. only
+#      when the storage can enforce a size on a folder.
 #   2. mountpoint_mount: allow mounting snapshots of path-backed subvolumes
 #      (read-only bind mount of the `name@snap` sibling directory) instead of
 #      dying. Needed for vzdump snapshot-mode backups and `pct mount --snap`.
@@ -52,12 +55,19 @@ my $apply = sub {
 
 # --- patch 1: alloc_disk ----------------------------------------------------
 
+# An earlier version of this script made bcachefs unconditional. That form has
+# to be reverted before the storage-gated one can apply.
+if (index($src, q~$scfg->{type} ne 'bcachefs'~) >= 0) {
+    die "patch 1: an older, unconditional version of this patch is applied.\n"
+        . "Restore the pristine file first:  cp $orig $file\n";
+}
+
 my $p1_old =
     q~if ($size_kb > 0 && !($scfg->{type} eq 'btrfs' && $scfg->{quotas})) {~;
 my $p1_new =
-    q~if ($size_kb > 0 && !($scfg->{type} eq 'btrfs' && $scfg->{quotas}) && $scfg->{type} ne 'bcachefs') {~;
+    q~if ($size_kb > 0 && !($scfg->{type} eq 'btrfs' && $scfg->{quotas}) && !($scfg->{type} eq 'bcachefs' && $scfg->{'bcachefs-subvol-rootfs'})) {~;
 
-$apply->('patch 1 (alloc_disk)', $p1_old, $p1_new, q~$scfg->{type} ne 'bcachefs'~);
+$apply->('patch 1 (alloc_disk)', $p1_old, $p1_new, q~$scfg->{'bcachefs-subvol-rootfs'}~);
 
 # --- patch 2: mountpoint_mount ----------------------------------------------
 
