@@ -21,6 +21,29 @@ with different characteristics on a single filesystem, straight from
 
 ## Install
 
+From the package (recommended):
+
+```
+apt install ./pve-bcachefs_<version>_all.deb
+```
+
+The package installs the storage plugin, patches `PVE::LXC`, and re-applies
+that patch automatically after every `pve-container` upgrade via a dpkg
+trigger — the patch does not survive upgrades on its own. Removing the package
+restores the original `PVE::LXC`.
+
+Set `APPLY_LXC_PATCH=no` in `/etc/default/pve-bcachefs` to install the storage
+plugin without touching `pve-container`; sized container rootfs volumes then
+land as raw images, which works and enforces its own size.
+
+To build the package:
+
+```
+make deb          # produces ../pve-bcachefs_<version>_all.deb
+```
+
+From a checkout, without packaging:
+
 ```
 ./install.sh                          # plugin only
 perl patches/patch-pve-container.pl   # optional, see below

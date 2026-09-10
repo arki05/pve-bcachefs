@@ -1,0 +1,18 @@
+#!/bin/sh
+set -e
+
+ORIG=/var/lib/pve-bcachefs/LXC.pm.orig
+LXC=/usr/share/perl5/PVE/LXC.pm
+
+case "$1" in
+    remove | deconfigure)
+        if [ -f "$ORIG" ] && [ -f "$LXC" ]; then
+            cp "$ORIG" "$LXC"
+            echo "pve-bcachefs: restored $LXC from $ORIG"
+        fi
+        ;;
+esac
+
+#DEBHELPER#
+
+exit 0

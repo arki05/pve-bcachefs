@@ -1,0 +1,57 @@
+#!/bin/sh
+set -e
+
+PATCH=/usr/share/pve-bcachefs/patch-pve-container.pl
+DEFAULTS=/etc/default/pve-bcachefs
+
+# A host patched by hand before this package existed keeps its pristine copy
+# next to the file itself; move it into our state directory so prerm can find it.
+migrate_pristine_copy() {
+    old=/usr/share/perl5/PVE/LXC.pm.orig
+    new=/var/lib/pve-bcachefs/LXC.pm.orig
+
+    if [ -f "$old" ] && [ ! -f "$new" ]; then
+        mkdir -p /var/lib/pve-bcachefs
+        mv "$old" "$new"
+        echo "pve-bcachefs: moved the pristine PVE/LXC.pm copy to $new"
+    fi
+}
+
+apply_lxc_patch() {
+    [ -f "$PATCH" ] || return 0
+
+    APPLY_LXC_PATCH=yes
+    # shellcheck source=/dev/null
+    [ -r "$DEFAULTS" ] && . "$DEFAULTS"
+
+    case "$APPLY_LXC_PATCH" in
+        [Yy][Ee][Ss] | [Tt][Rr][Uu][Ee] | 1) ;;
+        *)
+            echo "pve-bcachefs: APPLY_LXC_PATCH is not enabled in $DEFAULTS, leaving pve-container alone"
+            return 0
+            ;;
+    esac
+
+    # A failure here is not fatal: without the patch a sized container rootfs is
+    # allocated as a raw image, which works and enforces its own size. Report it
+    # clearly rather than leaving the package half-configured.
+    if perl "$PATCH"; then
+        return 0
+    fi
+
+    echo "pve-bcachefs: could not patch PVE::LXC." >&2
+    echo "  Container rootfs volumes with a size will be allocated as raw images" >&2
+    echo "  instead of subvolumes until this is resolved. This usually means a" >&2
+    echo "  pve-container update changed the code the patch expects." >&2
+}
+
+case "$1" in
+    configure | triggered)
+        migrate_pristine_copy
+        apply_lxc_patch
+        ;;
+esac
+
+#DEBHELPER#
+
+exit 0

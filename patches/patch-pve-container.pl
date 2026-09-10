@@ -23,18 +23,42 @@
 use strict;
 use warnings;
 
+use File::Basename qw(basename);
+
 my $file = shift // '/usr/share/perl5/PVE/LXC.pm';
 
 open(my $fh, '<', $file) or die "cannot open $file: $!\n";
 my $src = do { local $/; <$fh> };
 close($fh);
 
-my $orig = "$file.orig";
+# A packaged install keeps the pristine copy in its own state directory, out of
+# the package-owned /usr/share tree; a git checkout falls back to writing it
+# beside the file being patched.
+my $statedir = '/var/lib/pve-bcachefs';
+my $orig = -d $statedir ? "$statedir/" . basename($file) . '.orig' : "$file.orig";
+
+# Anything that only exists in a patched file. Used to avoid enshrining an
+# already-patched file as the "pristine" copy, which would make the backup
+# useless for reverting - the case when a manually patched host later installs
+# the package and the pristine copy lives somewhere else.
+my @applied_markers = (
+    q~subvol_rootfs_active~,
+    q~$scfg->{'bcachefs-subvol-rootfs'}~,
+    q~$scfg->{type} ne 'bcachefs'~,
+    'read-only bind mount suffices',
+);
+my $looks_patched = grep { index($src, $_) >= 0 } @applied_markers;
+
 if (!-e $orig) {
-    open(my $o, '>', $orig) or die "cannot write $orig: $!\n";
-    print {$o} $src;
-    close($o);
-    print "saved pristine copy to $orig\n";
+    if ($looks_patched) {
+        warn "not saving a pristine copy: '$file' is already patched.\n"
+            . "  If you have an untouched copy, put it at $orig.\n";
+    } else {
+        open(my $o, '>', $orig) or die "cannot write $orig: $!\n";
+        print {$o} $src;
+        close($o);
+        print "saved pristine copy to $orig\n";
+    }
 }
 
 my $changed = 0;

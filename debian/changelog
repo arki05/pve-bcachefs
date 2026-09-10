@@ -1,0 +1,11 @@
+pve-bcachefs (0.1.0) trixie; urgency=medium
+
+  * Initial packaged release.
+  * bcachefs storage plugin with subvolume container rootfs, native snapshots,
+    clones and rollback, and per-storage bcachefs IO options.
+  * Container size enforcement via bcachefs project quotas, with a raw-image
+    fallback where the filesystem has no project quotas.
+  * Patches PVE::LXC for sized subvolume rootfs volumes and snapshot-mode
+    vzdump, re-applied automatically after pve-container upgrades.
+
+ -- Julius Arkenberg <julius@rkenberg.de>  Thu, 10 Sep 2026 12:00:00 +0200
