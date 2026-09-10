@@ -446,6 +446,31 @@ my sub quota_mode($) {
     return (use_subvol_rootfs($scfg) && prjquota_enabled($scfg->{path})) ? 1 : 0;
 }
 
+# Called from the patched pve-container to decide whether a sized container
+# rootfs on this storage is placed as a subvolume or as a raw image.
+#
+# This mirrors the test upstream already applies to btrfs, which uses a folder
+# only when the storage declares `quotas` - i.e. only when it can enforce a size
+# on the result. If the filesystem cannot enforce one, falling back to a raw
+# image is the safer answer: the image enforces its own size, whereas a folder
+# would silently be unlimited. Existing subvolume volumes are unaffected and
+# keep working; they simply are not enforced.
+#
+# Public on purpose: this is the plugin's interface to patch 1.
+sub subvol_rootfs_active {
+    my ($scfg) = @_;
+
+    return 0 if !$scfg->{'bcachefs-subvol-rootfs'};
+    return 1 if quota_mode($scfg);
+
+    warn "bcachefs: project quotas are unavailable on '$scfg->{path}', so a raw"
+        . " image is being allocated instead of a subvolume - its size can be"
+        . " enforced, a subvolume's could not. Enable prjquota on the"
+        . " filesystem to get folder containers.\n";
+
+    return 0;
+}
+
 # The project id of a volume, taken from its anchor. Allocated from the volume
 # name on first use and then recorded, so it survives a rename to another vmid.
 my sub anchor_projid($$) {
@@ -605,13 +630,15 @@ sub activate_storage {
 
     assert_bcachefs($path);
 
-    # Warn rather than die: degrading to unenforced sizes keeps existing guests
-    # usable, whereas failing activation would take the whole storage offline.
+    # Warn rather than die: new volumes fall back to raw images, which enforce
+    # their own size, and existing subvolume volumes keep working unenforced.
+    # Failing activation would take the whole storage offline instead.
     if (use_subvol_rootfs($scfg) && !prjquota_enabled($path)) {
         warn "storage '$storeid': project quotas are not enabled on the filesystem at"
-            . " '$path' - container sizes will be recorded but NOT enforced. Enable them"
-            . " by adding 'prjquota' to the mount options, or offline with"
-            . " 'bcachefs set-fs-option --prjquota=1 <device>'.\n";
+            . " '$path' - new container rootfs volumes will be allocated as raw images"
+            . " rather than subvolumes, and any existing subvolume volumes are NOT"
+            . " size-enforced. Enable quotas by adding 'prjquota' to the mount options,"
+            . " or offline with 'bcachefs set-fs-option --prjquota=1 <device>'.\n";
     }
 
     eval { quota_inflight_repair($scfg) if quota_mode($scfg) };

@@ -69,10 +69,17 @@ refuses to run against unknown code.
 
 The option is the single switch between the two layouts:
 
-| `bcachefs-subvol-rootfs` | container rootfs | size enforcement |
-|---|---|---|
-| unset (default) | ext4 in a raw image, on a loop device | hard, by the image size |
-| `1` | bcachefs subvolume (folder) | project quotas, see below |
+| `bcachefs-subvol-rootfs` | prjquota on the fs | container rootfs | size enforcement |
+|---|---|---|---|
+| unset (default) | — | ext4 in a raw image, on a loop device | hard, by the image size |
+| `1` | yes | bcachefs subvolume (folder) | project quotas, see below |
+| `1` | no | ext4 in a raw image (fallback) | hard, by the image size |
+
+The option asks for folder containers; it only gets them where the filesystem
+can enforce a size on one. If project quotas are unavailable the plugin falls
+back to a raw image rather than handing out an unlimited folder, and warns on
+every activation and every allocation. Subvolume volumes created earlier keep
+working, unenforced.
 
 ## Layout
 
