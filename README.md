@@ -21,7 +21,23 @@ with different characteristics on a single filesystem, straight from
 
 ## Install
 
-From the package (recommended):
+From the apt repository (recommended):
+
+```
+install -d -m0755 /etc/apt/keyrings
+curl -fsSL https://apt.arki05.com/pubkey.asc \
+    | gpg --dearmor -o /etc/apt/keyrings/arki05.gpg
+echo "deb [signed-by=/etc/apt/keyrings/arki05.gpg] https://apt.arki05.com trixie main" \
+    > /etc/apt/sources.list.d/arki05.list
+apt update && apt install pve-bcachefs
+```
+
+Signed, and carries both `amd64` and `arm64` indices — the package itself is
+`Architecture: all`, so one build serves both. Every released version stays
+installable, so `apt install pve-bcachefs=<version>` can pin an older one.
+
+Or from a downloaded `.deb`, if you would rather not add a repository —
+[releases](https://github.com/arki05/pve-bcachefs/releases):
 
 ```
 apt install ./pve-bcachefs_<version>_all.deb
