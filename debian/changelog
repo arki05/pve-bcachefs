@@ -1,3 +1,15 @@
+pve-bcachefs (0.0.4) trixie; urgency=medium
+
+  * Project ids now reserve 8 bits for the disk index rather than 4, so the low
+    byte carries the index and the rest the vmid. 256 slots covers PVE's
+    mp0..mp255 exactly; the previous 16 was arbitrary and would have refused a
+    guest with more than sixteen volumes on one storage.
+  * Existing volumes are unaffected: the id is recorded in trusted.pve.projid
+    and read back from there, so only newly allocated volumes use the wider
+    scheme and the two coexist.
+
+ -- Julius Arkenberg <julius@rkenberg.de>  Thu, 10 Sep 2026 22:30:00 +0200
+
 pve-bcachefs (0.0.3) trixie; urgency=medium
 
   * Snapshot mounting for path-backed subvolumes moved out to the new

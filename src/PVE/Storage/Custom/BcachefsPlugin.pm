@@ -333,9 +333,13 @@ my sub get_project_usage($$) {
     return ($bhard * 1024, $curspace);
 }
 
-# Project IDs are derived from the volume name so that they are stable across
-# reboots and need no separate bookkeeping: `<prefix>-<vmid>-disk-<n>`.
-my $PROJID_DISKS_PER_VMID = 16;
+# A project id is derived from the volume name on first use: the low 8 bits
+# carry the disk index, the rest the vmid. 256 slots covers PVE's mp0..mp255
+# exactly. The result is only an initial allocation - it is then recorded in
+# trusted.pve.projid and read back from there, so volumes keep their id even if
+# this scheme ever changes, and a rename to another guest does not silently
+# re-derive one.
+my $PROJID_DISKS_PER_VMID = 256;
 
 my sub projid_for_name($) {
     my ($name) = @_;

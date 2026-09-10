@@ -22,6 +22,7 @@ use warnings;
 
 use File::Basename qw(basename dirname);
 use File::Find ();
+use PVE::Syscall;
 
 my ($dry, $force) = (0, 0);
 my @rest;
@@ -44,7 +45,7 @@ my $imagedir = "$base/images";
 # a settable `bcachefs.project` xattr on every file, which aborts `rsync -X`.
 use constant BCHFS_IOC_REINHERIT_ATTRS => 0x8008bc40;
 
-my $PROJID_DISKS_PER_VMID = 16;
+my $PROJID_DISKS_PER_VMID = 256;   # low 8 bits = disk index, covers mp0..mp255
 
 sub projid_for_name {
     my ($name) = @_;
@@ -91,6 +92,40 @@ sub reinherit_tree {
         },
     }, $root);
     return $n;
+}
+
+# The volume's nominal size, from whichever mountpoint entry references it.
+sub size_from_config {
+    my ($vmid, $name) = @_;
+    my $cfg = `pct config $vmid 2>/dev/null` // '';
+    for my $line (split /\n/, $cfg) {
+        next if index($line, $name) < 0;
+        next if $line !~ /size=(\d+)([KMGT])/;
+        my ($n, $unit) = ($1, $2);
+        my %mult = (K => 1024, M => 1024**2, G => 1024**3, T => 1024**4);
+        return $n * $mult{$unit};
+    }
+    return undef;
+}
+
+# quotactl_fd(2): quotactl(2) takes a block device, useless for a multi-device
+# bcachefs; this takes a directory fd on the mount instead.
+sub set_project_limit {
+    my ($path, $projid, $bytes) = @_;
+
+    my $Q_SETQUOTA = 0x800008;
+    my $PRJQUOTA   = 2;
+    my $QIF_BLIMITS = 1;
+
+    sysopen(my $fh, $path, 0)  or return 0;   # O_RDONLY
+    my $blocks = int(($bytes + 1023) / 1024);
+    # struct if_dqblk: 8 x __u64 then __u32 dqb_valid, padded to 72 bytes
+    my $buf = pack('Q8 L x4', $blocks, $blocks, 0, 0, 0, 0, 0, 0, $QIF_BLIMITS);
+    my $cmd = ($Q_SETQUOTA << 8) | $PRJQUOTA;
+    my $ret = syscall(&PVE::Syscall::SYS_quotactl_fd, fileno($fh), $cmd, int($projid), $buf);
+    close($fh);
+
+    return $ret == 0 ? 1 : 0;
 }
 
 sub container_running {
@@ -170,6 +205,23 @@ for my $vmdir (sort glob("$imagedir/[0-9]*")) {
                 if $got != $projid;
         }
 
+        # Set the size and quota limit too. Volumes this old predate
+        # trusted.pve.size, so the nominal size has to come from the container
+        # config - without it the volume reports zero and enforces nothing,
+        # which looks converted but is not.
+        if (!$dry) {
+            my $bytes = size_from_config($vmid, $name);
+            if (defined($bytes)) {
+                run('setfattr', '-n', 'trusted.pve.size', '-v', $bytes, "$path/data")
+                    or warn "    could not record trusted.pve.size\n";
+                set_project_limit($base, $projid, $bytes)
+                    or warn "    could not set the quota limit\n";
+                printf "    limit %.0f GiB applied\n", $bytes / (1024**3);
+            } else {
+                warn "    no size found in the config for $vmid - set it with pct resize\n";
+            }
+        }
+
         unlink($marker) unless $dry;
         push @converted, "$vmid/$name";
     }
@@ -177,5 +229,3 @@ for my $vmdir (sort glob("$imagedir/[0-9]*")) {
 
 print "\n" . scalar(@converted) . " volume(s) converted"
     . ($dry ? " (dry run, nothing changed)" : "") . "\n";
-print "Set each container's size again (pct resize) to apply its quota limit.\n"
-    if @converted && !$dry;
