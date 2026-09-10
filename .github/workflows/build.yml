@@ -73,3 +73,23 @@ jobs:
         with:
           files: dist/*.deb
           generate_release_notes: true
+
+      # Tell the apt repository to rebuild its indices now rather than waiting
+      # for its nightly run. Optional: without the token the release still
+      # lands, it just shows up in the repository a little later.
+      - name: Trigger apt repository publish
+        env:
+          DISPATCH_TOKEN: ${{ secrets.APT_REPO_DISPATCH_TOKEN }}
+        run: |
+          if [ -z "$DISPATCH_TOKEN" ]; then
+            echo "APT_REPO_DISPATCH_TOKEN is not set - skipping."
+            echo "The release will be picked up by the apt repo's nightly run."
+            exit 0
+          fi
+          curl -fsS -X POST \
+            -H "Authorization: Bearer $DISPATCH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            https://api.github.com/repos/arki05/apt.arki05.com/dispatches \
+            -d '{"event_type":"package-released"}'
+          echo "dispatched"
