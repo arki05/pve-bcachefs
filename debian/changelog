@@ -1,3 +1,14 @@
+pve-bcachefs (0.0.2) trixie; urgency=medium
+
+  * No changes to the plugin, the patch or the packaging: this release exists
+    to exercise the release pipeline end to end - build, release, dispatch to
+    the apt repository, and retention of earlier versions in the pool.
+  * Releases now trigger apt repository publishing immediately, via the
+    workflow dispatch endpoint rather than repository_dispatch, so the token
+    involved needs only the Actions permission and not push access to code.
+
+ -- Julius Arkenberg <julius@rkenberg.de>  Thu, 10 Sep 2026 18:45:00 +0200
+
 pve-bcachefs (0.0.1) trixie; urgency=medium
 
   * Initial packaged release.
