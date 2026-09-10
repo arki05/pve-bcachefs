@@ -1,0 +1,73 @@
+name: build
+
+on:
+  push:
+    branches: ["**"]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: debian:trixie
+    env:
+      DEBIAN_FRONTEND: noninteractive
+
+    steps:
+      # actions/checkout needs node, which the plain debian image lacks
+      - name: Prepare container
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends nodejs ca-certificates
+
+      - uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          apt-get install -y --no-install-recommends \
+            debhelper devscripts lintian perl
+
+      - name: Check the patch script parses
+        run: perl -c patches/patch-pve-container.pl
+
+      - name: Build
+        run: dpkg-buildpackage -b -us -uc
+
+      - name: Lintian
+        run: lintian ../pve-bcachefs_*_all.deb || true
+
+      - name: Collect
+        run: |
+          mkdir -p dist
+          mv ../pve-bcachefs_*.deb dist/
+          mv ../pve-bcachefs_*.buildinfo ../pve-bcachefs_*.changes dist/ 2>/dev/null || true
+          ls -l dist/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: deb
+          path: dist/
+          if-no-files-found: error
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: deb
+          path: dist
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.deb
+          generate_release_notes: true
