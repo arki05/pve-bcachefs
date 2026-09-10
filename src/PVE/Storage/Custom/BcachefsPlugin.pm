@@ -128,6 +128,15 @@ sub properties {
                 . " for VM images.",
             type => 'boolean',
         },
+        'bcachefs-manage-options' => {
+            description => "Whether the plugin applies the bcachefs-* IO options above to"
+                . " the storage directory. Set to 0 to manage bcachefs file options"
+                . " yourself - the plugin then never calls set-file-option and never"
+                . " resets what it finds. Options set explicitly on a subdirectory are"
+                . " left alone either way; this only governs the storage directory.",
+            type => 'boolean',
+            default => 1,
+        },
         'bcachefs-erasure-code' => {
             description => "Store data on this storage with erasure coding (parity) rather"
                 . " than whole replicas, trading write overhead for usable capacity. Needs"
@@ -167,6 +176,7 @@ sub options {
         'bcachefs-promote-target' => { optional => 1 },
         'bcachefs-nocow' => { optional => 1 },
         'bcachefs-erasure-code' => { optional => 1 },
+        'bcachefs-manage-options' => { optional => 1 },
         'bcachefs-subvol-rootfs' => { optional => 1 },
     };
 }
@@ -602,6 +612,19 @@ my sub apply_fs_options {
     my ($class, $storeid, $scfg) = @_;
 
     my $path = $scfg->{path};
+
+    # Opt out entirely: the admin manages bcachefs file options by hand. This
+    # only concerns the storage directory itself - options set explicitly on a
+    # subdirectory are never touched either way, because
+    # `set-file-option --remove-all` clears only the path it is given and leaves
+    # explicitly-set descendants alone at any depth.
+    if (defined($scfg->{'bcachefs-manage-options'}) && !$scfg->{'bcachefs-manage-options'}) {
+        my @configured = grep { defined($scfg->{$_}) } sort keys %$fs_option_map;
+        warn "storage '$storeid': bcachefs-manage-options is off, ignoring "
+            . join(', ', @configured) . "\n"
+            if @configured;
+        return;
+    }
 
     my @args;
     for my $prop (sort keys %$fs_option_map) {

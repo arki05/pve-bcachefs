@@ -71,7 +71,14 @@ bcachefs: ct-bulk
 Point `path` at any directory on a bcachefs filesystem — the plugin verifies
 the filesystem type on activation. Option changes are picked up on the next
 storage activation and propagate to existing data in the background
-(bcachefs "reconcile").
+(bcachefs "reconcile"). Options removed from `storage.cfg` are cleared from the
+filesystem again.
+
+Only the storage directory itself is managed. Options set explicitly on a
+subdirectory — per guest, say — are never touched, at any depth, so manual
+tuning coexists with what the plugin applies. To keep the plugin away from the
+storage directory as well, set `bcachefs-manage-options 0`; it then never calls
+`set-file-option` and never resets what it finds.
 
 ## Folder containers, sizes, and the pve-container patch
 
