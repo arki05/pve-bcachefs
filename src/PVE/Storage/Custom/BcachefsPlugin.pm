@@ -494,6 +494,35 @@ sub subvol_rootfs_active {
 
 # The project id of a volume, taken from its anchor. Allocated from the volume
 # name on first use and then recorded, so it survives a rename to another vmid.
+# Is this project id already spoken for?
+#
+# Two independent sources, because neither alone is sufficient:
+#
+#  - Recorded ids on our own anchors. Authoritative for volumes we manage,
+#    including one that has no data or limit yet. The derivation is a bijection
+#    within a single scheme but not across a change to one, so a volume numbered
+#    under an older, narrower scheme can land on an id a newer scheme derives
+#    for a different guest.
+#
+#  - The filesystem's own quota state. The storage does not own the filesystem:
+#    project quotas may be in use for something entirely outside PVE, and those
+#    ids are invisible to the scan above. A project carrying either a limit or
+#    accounted space is in use by someone.
+my sub projid_in_use($$$$) {
+    my ($fspath, $imagedir, $projid, $self) = @_;
+
+    my ($limit, $used) = get_project_usage($fspath, $projid);
+    return 1 if ($limit // 0) > 0 || ($used // 0) > 0;
+
+    for my $anchor (glob("$imagedir/[0-9]*/*")) {
+        next if $anchor eq $self;
+        next if !-d "$anchor/$SUBVOL_INNER";
+        my $recorded = get_num_xattr($anchor, $PROJID_XATTR);
+        return 1 if defined($recorded) && $recorded == $projid;
+    }
+    return 0;
+}
+
 my sub anchor_projid($$) {
     my ($anchor, $name) = @_;
 
@@ -504,6 +533,16 @@ my sub anchor_projid($$) {
 
     $projid = projid_for_name($name);
     return undef if !defined($projid);
+
+    # Walk past anything already taken. Only ever reached where schemes have
+    # been mixed; within one scheme the derived id is unique by construction.
+    my $imagedir = dirname(dirname($anchor));
+    my $fspath = dirname($imagedir);
+    my $tries = 0;
+    while (projid_in_use($fspath, $imagedir, $projid, $anchor)) {
+        die "no free quota project id near $projid\n" if ++$tries > 1024;
+        $projid++;
+    }
 
     set_num_xattr($anchor, $PROJID_XATTR, $projid);
     return $projid;

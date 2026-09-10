@@ -1,3 +1,15 @@
+pve-bcachefs (0.0.5) trixie; urgency=medium
+
+  * Check that a derived project id is actually free before claiming it, against
+    both the ids recorded on our own anchors and the filesystem's own quota
+    state. The derivation is a bijection within one scheme but not across a
+    change to one - an id assigned under the previous, narrower scheme could
+    collide with one this scheme derives for a different guest - and the storage
+    does not own the filesystem, so project quotas may be in use for something
+    entirely outside PVE.
+
+ -- Julius Arkenberg <julius@rkenberg.de>  Thu, 10 Sep 2026 23:15:00 +0200
+
 pve-bcachefs (0.0.4) trixie; urgency=medium
 
   * Project ids now reserve 8 bits for the disk index rather than 4, so the low

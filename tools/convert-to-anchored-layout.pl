@@ -24,12 +24,13 @@ use File::Basename qw(basename dirname);
 use File::Find ();
 use PVE::Syscall;
 
-my ($dry, $force) = (0, 0);
+my ($dry, $force, $reproject) = (0, 0, 0);
 my @rest;
 for (@ARGV) {
-    if    ($_ eq '--dry-run') { $dry = 1 }
-    elsif ($_ eq '--force')   { $force = 1 }
-    else                      { push @rest, $_ }
+    if    ($_ eq '--dry-run')   { $dry = 1 }
+    elsif ($_ eq '--force')     { $force = 1 }
+    elsif ($_ eq '--reproject') { $reproject = 1 }
+    else                        { push @rest, $_ }
 }
 my $base = shift(@rest) or die "usage: $0 [--dry-run] [--force] <storage-path> [vmid ...]\n";
 my %only = map { $_ => 1 } @rest;
@@ -142,7 +143,41 @@ for my $vmdir (sort glob("$imagedir/[0-9]*")) {
     for my $path (sort glob("$vmdir/subvol-*-disk-*.subvol")) {
         my $name = basename($path);
         next if $name =~ /\@/;                 # a snapshot, handled with its volume
-        next if -d "$path/data";               # already anchored
+
+        if (-d "$path/data") {
+            # Already anchored. Only of interest when re-deriving ids after a
+            # scheme change - an id numbered under an older, narrower scheme can
+            # collide with one a newer scheme derives for a different guest.
+            next if !$reproject;
+            # Reprojection rewrites inode attributes across the whole tree; a
+            # file created while that runs would keep the old project. Same rule
+            # as a conversion: the guest has to be stopped.
+            if (!$force && container_running($vmid)) {
+                print "$vmid/$name\n    skipped: container $vmid is running\n";
+                next;
+            }
+            my $want = projid_for_name($name);
+            my $have = `getfattr -n trusted.pve.projid --only-values "$path" 2>/dev/null`;
+            $have = ($have =~ /^(\d+)/) ? $1 : -1;
+            next if $have == $want;
+            print "$vmid/$name\n    reprojecting $have -> $want\n";
+            next if $dry;
+            run('chattr', '-p', $want, $path)
+                or die "    chattr on anchor failed\n";
+            run('setfattr', '-n', 'trusted.pve.projid', '-v', $want, $path)
+                or warn "    could not record trusted.pve.projid\n";
+            my $n = reinherit_tree("$path/data");
+            print "    reprojected " . ($n // 0) . " inodes\n";
+            my $bytes = size_from_config($vmid, $name);
+            if (defined($bytes)) {
+                set_project_limit($base, $want, $bytes)
+                    or warn "    could not set the quota limit\n";
+                set_project_limit($base, $have, 0) if $have > 0;   # release the old id
+                printf "    limit %.0f GiB moved to project %d\n", $bytes / (1024**3), $want;
+            }
+            push @converted, "$vmid/$name";
+            next;
+        }
 
         print "$vmid/$name\n";
 
