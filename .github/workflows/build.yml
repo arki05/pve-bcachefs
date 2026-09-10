@@ -86,10 +86,13 @@ jobs:
             echo "The release will be picked up by the apt repo's nightly run."
             exit 0
           fi
+          # workflow_dispatch rather than repository_dispatch: it needs only the
+          # Actions permission, whereas repository_dispatch needs Contents:write
+          # - which would also grant push access to this repository's code.
           curl -fsS -X POST \
             -H "Authorization: Bearer $DISPATCH_TOKEN" \
             -H "Accept: application/vnd.github+json" \
             -H "X-GitHub-Api-Version: 2022-11-28" \
-            https://api.github.com/repos/arki05/apt.arki05.com/dispatches \
-            -d '{"event_type":"package-released"}'
+            https://api.github.com/repos/arki05/apt.arki05.com/actions/workflows/publish.yml/dispatches \
+            -d '{"ref":"main"}'
           echo "dispatched"
