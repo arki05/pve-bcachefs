@@ -1,15 +1,14 @@
 #!/bin/sh
 set -e
 
-ORIG=/var/lib/pve-bcachefs/LXC.pm.orig
-LXC=/usr/share/perl5/PVE/LXC.pm
+PATCH=/usr/share/pve-bcachefs/patch-pve-container.pl
 
 case "$1" in
     remove | deconfigure)
-        if [ -f "$ORIG" ] && [ -f "$LXC" ]; then
-            cp "$ORIG" "$LXC"
-            echo "pve-bcachefs: restored $LXC from $ORIG"
-        fi
+        # Reverse only our own change. pve-lxc-snapshot-mount patches the same
+        # file for its own reasons, so restoring the pristine copy wholesale
+        # would silently revert it too.
+        [ -f "$PATCH" ] && perl "$PATCH" --revert || true
         ;;
 esac
 

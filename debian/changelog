@@ -1,3 +1,19 @@
+pve-bcachefs (0.0.3) trixie; urgency=medium
+
+  * Snapshot mounting for path-backed subvolumes moved out to the new
+    pve-lxc-snapshot-mount package and is now depended on rather than
+    duplicated. It was never bcachefs-specific - it repairs the same gap for
+    btrfs, an officially supported storage type - and carrying a copy here
+    meant two packages racing to patch one file, held apart only by a comment
+    string that happened to match.
+  * Drop APPLY_LXC_PATCH. A storage plugin that only half works is not a
+    configuration anyone wants, and the raw-image fallback already covers the
+    case where the patch cannot be applied.
+  * The patch script gains --revert, so removing the package reverses just its
+    own change instead of restoring the whole file over another package's.
+
+ -- Julius Arkenberg <julius@rkenberg.de>  Thu, 10 Sep 2026 20:45:00 +0200
+
 pve-bcachefs (0.0.2) trixie; urgency=medium
 
   * No changes to the plugin, the patch or the packaging: this release exists

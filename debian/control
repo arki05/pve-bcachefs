@@ -17,6 +17,7 @@ Depends:
  bcachefs-tools (>= 1.39),
  libpve-storage-perl,
  pve-container,
+ pve-lxc-snapshot-mount,
 Description: bcachefs storage plugin for Proxmox VE
  Stores container rootfs volumes as bcachefs subvolumes - folders rather than
  image files - so snapshots, rollbacks and clones are native bcachefs
@@ -28,5 +29,6 @@ Description: bcachefs storage plugin for Proxmox VE
  .
  This package also patches PVE::LXC so that sized container rootfs volumes can
  be placed as subvolumes, and re-applies that patch after pve-container
- upgrades. Set APPLY_LXC_PATCH=no in /etc/default/pve-bcachefs to install the
- storage plugin without touching pve-container.
+ upgrades. Mounting snapshots of those subvolumes is handled by
+ pve-lxc-snapshot-mount, which is not bcachefs-specific and is depended on
+ rather than duplicated.

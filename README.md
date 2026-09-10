@@ -48,9 +48,12 @@ that patch automatically after every `pve-container` upgrade via a dpkg
 trigger — the patch does not survive upgrades on its own. Removing the package
 restores the original `PVE::LXC`.
 
-Set `APPLY_LXC_PATCH=no` in `/etc/default/pve-bcachefs` to install the storage
-plugin without touching `pve-container`; sized container rootfs volumes then
-land as raw images, which works and enforces its own size.
+Mounting snapshots of those subvolumes — which snapshot-mode vzdump and
+`pct mount --snap` need — is handled by
+[pve-lxc-snapshot-mount](https://github.com/arki05/pve-lxc-snapshot-mount),
+pulled in as a dependency. That fix is not bcachefs-specific (it repairs the
+same gap for btrfs) so it lives in its own package rather than being duplicated
+here.
 
 To build the package:
 
@@ -183,10 +186,14 @@ pct create 123 ... --rootfs ct-fast:8     # raw+ext4 fallback, still snapshottab
 ```
 
 `patches/patch-pve-container.pl` lifts this for storages that set
-`bcachefs-subvol-rootfs 1`, and additionally enables snapshot-mode vzdump
-backups for subvolume containers (upstream dies here even on btrfs). The patch
-must be re-applied after `pve-container` upgrades; it is exact-match and
-refuses to run against unknown code.
+`bcachefs-subvol-rootfs 1`. The patch must be re-applied after `pve-container`
+upgrades — the package does that automatically via a dpkg trigger — and it is
+exact-match, refusing to run against unknown code.
+
+Snapshot-mode vzdump backups of subvolume containers need a second, unrelated
+fix: upstream cannot mount snapshots of path-backed subvolumes at all, on btrfs
+or bcachefs. That lives in
+[pve-lxc-snapshot-mount](https://github.com/arki05/pve-lxc-snapshot-mount).
 
 The option is the single switch between the two layouts:
 
@@ -253,8 +260,7 @@ pre-anchor flat volumes still listed, started and freed (including one with 9
 snapshots); and the raw-image fallback on a filesystem without project quotas.
 
 Package lifecycle: install onto a hand-patched host, `pve-container` reinstall
-re-applying the patch via the dpkg trigger, `APPLY_LXC_PATCH=no`, and removal
-restoring the original `PVE/LXC.pm`.
+re-applying the patch via the dpkg trigger, and removal reversing it.
 
 ### Earlier — PVE 9.2, bcachefs-tools/dkms 1.38.8, storage APIVER 13-15
 
