@@ -128,6 +128,12 @@ sub properties {
                 . " for VM images.",
             type => 'boolean',
         },
+        'bcachefs-erasure-code' => {
+            description => "Store data on this storage with erasure coding (parity) rather"
+                . " than whole replicas, trading write overhead for usable capacity. Needs"
+                . " enough devices to satisfy bcachefs-data-replicas as parity stripes.",
+            type => 'boolean',
+        },
         'bcachefs-subvol-rootfs' => {
             description => "Place container rootfs volumes as bcachefs subvolumes (folder"
                 . " containers) instead of ext4 inside a raw image. Sizes are then enforced"
@@ -160,6 +166,7 @@ sub options {
         'bcachefs-background-target' => { optional => 1 },
         'bcachefs-promote-target' => { optional => 1 },
         'bcachefs-nocow' => { optional => 1 },
+        'bcachefs-erasure-code' => { optional => 1 },
         'bcachefs-subvol-rootfs' => { optional => 1 },
     };
 }
@@ -584,6 +591,7 @@ my $fs_option_map = {
     'bcachefs-background-target' => 'background_target',
     'bcachefs-promote-target' => 'promote_target',
     'bcachefs-nocow' => 'nocow',
+    'bcachefs-erasure-code' => 'erasure_code',
 };
 
 # Apply the configured IO-path options to the storage base directory. bcachefs
