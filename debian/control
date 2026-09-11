@@ -17,6 +17,7 @@ Depends:
  bcachefs-tools (>= 1.39),
  libpve-storage-perl,
  pve-container,
+ qemu-server,
  pve-lxc-snapshot-mount,
 Description: bcachefs storage plugin for Proxmox VE
  Stores container rootfs volumes as bcachefs subvolumes - folders rather than

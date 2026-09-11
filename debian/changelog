@@ -16,7 +16,21 @@ pve-bcachefs (0.0.6) UNRELEASED; urgency=medium
     bcachefs. It belongs with the plugin for the filesystem whose xattrs it
     names, by the same rule that sent the snapshot-mount fix out to
     pve-lxc-snapshot-mount because that one repaired btrfs too.
-  * patch-pve-container.pl now carries a series rather than a single change,
+  * Container and VM migration accept bcachefs volumes. Both migration paths
+    decide whether a local volume can move by consulting a hardcoded list of
+    storage types - dir, btrfs, zfspool, lvmthin, lvm - that no third-party
+    plugin can join, so migrating any bcachefs guest failed with "storage type
+    'bcachefs' not supported". Nothing was missing from the plugin: PVE's own
+    Plugin.pm already exports a subvolume as tar+size, which is exactly the
+    format a bcachefs container volume uses, and the export path was simply
+    never reached. Both sites carry upstream's own TODO saying the check
+    belongs in the storage layer; adding bcachefs to the lists is the local
+    fix, and asking the plugin instead is the upstream one.
+  * The patch script is patch-pve.pl now, not patch-pve-container.pl: it spans
+    three files across pve-container and qemu-server. Pristine copies are kept
+    per file under flattened names, since two of them are called Migrate.pm and
+    LXC.pm in different directories.
+  * patch-pve.pl now carries a series rather than a single change,
     applying and reverting each independently, and adopts the filter if an
     older pct-move-volume-snapshots already applied it.
 

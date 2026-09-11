@@ -7,7 +7,7 @@ STATEDIR   = $(DESTDIR)/var/lib/pve-bcachefs
 .PHONY: install
 install:
 	install -D -m 0644 src/PVE/Storage/Custom/BcachefsPlugin.pm $(PLUGINDIR)/BcachefsPlugin.pm
-	install -D -m 0755 patches/patch-pve-container.pl $(SHAREDIR)/patch-pve-container.pl
+	install -D -m 0755 patches/patch-pve.pl $(SHAREDIR)/patch-pve.pl
 	install -d -m 0755 $(STATEDIR)
 
 .PHONY: deb

@@ -1,13 +1,23 @@
 #!/bin/sh
 set -e
 
-PATCH=/usr/share/pve-bcachefs/patch-pve-container.pl
+PATCH=/usr/share/pve-bcachefs/patch-pve.pl
 
 # A host patched by hand before this package existed keeps its pristine copy
 # next to the file itself; move it into our state directory so prerm finds it.
+# Releases before the patch series spanned several files used an unflattened
+# name for the pristine copy.
+migrate_flat_name() {
+    old=/var/lib/pve-bcachefs/LXC.pm.orig
+    new=/var/lib/pve-bcachefs/PVE_LXC.pm.orig
+    if [ -f "$old" ] && [ ! -f "$new" ]; then
+        mv "$old" "$new"
+    fi
+}
+
 migrate_pristine_copy() {
     old=/usr/share/perl5/PVE/LXC.pm.orig
-    new=/var/lib/pve-bcachefs/LXC.pm.orig
+    new=/var/lib/pve-bcachefs/PVE_LXC.pm.orig
 
     if [ -f "$old" ] && [ ! -f "$new" ]; then
         mkdir -p /var/lib/pve-bcachefs
@@ -19,10 +29,12 @@ migrate_pristine_copy() {
 case "$1" in
     configure | triggered)
         migrate_pristine_copy
+        migrate_flat_name
         [ -f "$PATCH" ] || exit 0
-        # Not fatal: without the patch a sized rootfs is allocated as a raw
-        # image, which works and enforces its own size. Report it rather than
-        # leaving the package half-configured.
+        # Not fatal: without the patches a sized rootfs is allocated as a raw
+        # image (which works and enforces its own size), and migration of a
+        # bcachefs volume is refused by PVE. Report it rather than leaving the
+        # package half-configured.
         if ! perl "$PATCH"; then
             echo "pve-bcachefs: could not patch PVE::LXC." >&2
             echo "  Container rootfs volumes with a size will be allocated as raw" >&2
