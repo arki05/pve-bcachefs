@@ -1,0 +1,103 @@
+name: storage lab
+
+# main only, plus manual dispatch. Deliberately no pull_request: a fork's PR
+# runs the workflow file from the base branch, but it still builds and installs
+# the PR's code - and debian/rules is a shell script. On a self-hosted runner
+# that is code execution on the box, so the event is excluded rather than
+# guarded.
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+    inputs:
+      profiles:
+        description: "Space-separated profile names to test"
+        default: "bcachefs"
+      pytest_args:
+        description: "Extra pytest arguments, e.g. -k Quota"
+        default: ""
+
+permissions:
+  contents: read
+
+# The lab is a singleton - one node, one set of disks - so runs queue rather
+# than race. Not cancel-in-progress: a half-torn-down lab is worse than a wait.
+concurrency:
+  group: storage-lab
+  cancel-in-progress: false
+
+jobs:
+  lab:
+    runs-on: [self-hosted, pve-bcachefs-lab]
+    timeout-minutes: 240
+    env:
+      PVE_LAB_STATE: /home/runner/lab-state
+      LAB: /home/runner/pve-storage-lab
+      PROFILES: ${{ github.event.inputs.profiles || 'bcachefs' }}
+      PYTEST_ARGS: ${{ github.event.inputs.pytest_args || '' }}
+
+    steps:
+      - name: Check out the plugin
+        uses: actions/checkout@v4
+        with:
+          path: plugin
+
+      - name: Check out the lab
+        uses: actions/checkout@v4
+        with:
+          repository: arki05/pve-storage-lab
+          path: lab
+
+      - name: Prepare the lab
+        run: |
+          set -euo pipefail
+          args=()
+          for p in $PROFILES; do
+            if [ "$p" = bcachefs ]; then
+              args+=(--profile-dir "$GITHUB_WORKSPACE/plugin/test/profile")
+            else
+              args+=(--profile-dir "$GITHUB_WORKSPACE/lab/profiles/$p")
+            fi
+          done
+          cd "$GITHUB_WORKSPACE/lab"
+          bash run.sh "${args[@]}" --phase prepare
+
+      # One step per storage, so a red step names the backend that broke rather
+      # than burying it in a combined log.
+      - name: Suite - bcachefs
+        if: contains(env.PROFILES, 'bcachefs')
+        run: cd "$GITHUB_WORKSPACE/lab" && bash run.sh --phase suite --only bcachefs -- $PYTEST_ARGS
+
+      - name: Suite - zfs
+        if: contains(env.PROFILES, 'zfs')
+        run: cd "$GITHUB_WORKSPACE/lab" && bash run.sh --phase suite --only zfs -- $PYTEST_ARGS
+
+      - name: Suite - btrfs
+        if: contains(env.PROFILES, 'btrfs')
+        run: cd "$GITHUB_WORKSPACE/lab" && bash run.sh --phase suite --only btrfs -- $PYTEST_ARGS
+
+      - name: Suite - lvm-thin
+        if: contains(env.PROFILES, 'lvm-thin')
+        run: cd "$GITHUB_WORKSPACE/lab" && bash run.sh --phase suite --only lvm-thin -- $PYTEST_ARGS
+
+      # Always: a suite that failed is exactly when the verdict matters. The
+      # exit status here comes from *unexpected* failures only, so a backend's
+      # declared known bugs do not turn the run red every time and hide the day
+      # something new breaks.
+      - name: Report
+        if: always()
+        run: cd "$GITHUB_WORKSPACE/lab" && bash run.sh --phase report
+
+      - name: Collect results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: storage-lab-results
+          path: |
+            /home/runner/lab-state/labs/lab/results/
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Tear down
+        if: always()
+        run: cd "$GITHUB_WORKSPACE/lab" && bash run.sh --phase teardown || true
