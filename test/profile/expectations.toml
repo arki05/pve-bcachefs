@@ -15,3 +15,17 @@ profile = "bcachefs"
 marker = "ct_resize_visible"
 kind = "limitation"
 reason = "the rootfs is a subvolume on a much larger filesystem, so df inside reports the filesystem rather than the quota - the limit is real and simply not visible from in there"
+
+[[expected]]
+profile = "bcachefs"
+marker = "snapshot_migration"
+kind = "limitation"
+reason = """
+A bcachefs VM disk is a raw image and a container rootfs is a subvolume, so
+the plugin inherits raw+size and tar+size as its export formats - neither of
+which has anywhere to put a snapshot. PVE checks before it starts and refuses
+with "non-migratable snapshot exists" rather than dropping them silently,
+which is the right failure. Carrying snapshots across would need a
+send/receive stream format, and bcachefs has none. Every backend without one
+behaves the same way, lvm-thin included.
+"""
