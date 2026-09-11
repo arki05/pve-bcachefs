@@ -29,6 +29,10 @@ $APT install -y -qq bcachefs-tools bcachefs-kernel-dkms
 # plugin does.
 $APT install -y -qq attr
 
+# Build dependencies, so setup.sh can build the plugin from the working tree
+# rather than testing the last published release.
+$APT install -y -qq build-essential debhelper devscripts dpkg-dev
+
 # Fail here rather than leaving a derived image whose module only fails to load
 # once a test tries to format something.
 modprobe bcachefs
@@ -40,12 +44,6 @@ $APT install -y -qq pve-bcachefs
 # filter moved into pve-bcachefs, and the point of leaving the other package
 # out is to prove that pve-bcachefs alone is enough to move a container off
 # bcachefs. If the move tests fail here, the patch did not come across.
-
-# The subvolume-rootfs path needs the pve-container patch applied; the package
-# does this from its postinst and a dpkg trigger, so verify rather than repeat.
-perl /usr/share/pve-bcachefs/patch-pve-container.pl 2>/dev/null || true
-grep -q subvol_rootfs_active /usr/share/perl5/PVE/LXC.pm \
-    || { echo "pve-container patch is not applied" >&2; exit 1; }
 
 bcachefs version
 dpkg -l | grep -E 'bcachefs|pve-bcachefs|snapshot-mount'

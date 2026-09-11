@@ -27,6 +27,36 @@ DISKS=("${ALL_DISKS[@]:0:${#ALL_DISKS[@]}-1}")
 modprobe bcachefs
 mkdir -p "$MOUNT"
 
+# ── The plugin under test ────────────────────────────────────────────────────
+#
+# bake.sh installed the last published pve-bcachefs so the derived image has a
+# working baseline. If a working tree was shipped, build it and install over
+# the top - otherwise the run tests whatever was released, which defeats the
+# point of running it against a branch.
+if [ -d /root/lab-source ]; then
+    echo "building pve-bcachefs from the working tree"
+    ( cd /root/lab-source && dpkg-buildpackage -us -uc -b >/tmp/build.log 2>&1 ) || {
+        echo "building the plugin failed:" >&2
+        tail -30 /tmp/build.log >&2
+        exit 1
+    }
+    deb=$(ls -t /root/*.deb 2>/dev/null | head -1)
+    [ -n "$deb" ] || { echo "no .deb produced by the build" >&2; exit 1; }
+    DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
+        -o DPkg::Lock::Timeout=600 --allow-downgrades "$deb"
+    echo "installed $(basename "$deb")"
+    dpkg-query -W -f='${Version}\n' pve-bcachefs
+fi
+
+# The subvolume-rootfs path and the copy_volume xattr filter both come from the
+# package's patch script, applied by its postinst and kept applied by a dpkg
+# trigger. Verify rather than assume - a plugin installed without its patches
+# silently allocates raw images and cannot move a volume off bcachefs.
+grep -q subvol_rootfs_active /usr/share/perl5/PVE/LXC.pm \
+    || { echo "the subvolume-rootfs patch is not applied" >&2; exit 1; }
+grep -q bcachefs_effective /usr/share/perl5/PVE/LXC.pm \
+    || { echo "the copy_volume xattr filter is not applied" >&2; exit 1; }
+
 if ! findmnt -rno TARGET "$MOUNT" >/dev/null 2>&1; then
     for d in "${DISKS[@]}"; do wipefs -aq "$d" || true; done
     # --prjquota at format time: project quotas are what enforce container
