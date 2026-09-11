@@ -70,8 +70,12 @@ class TestEffectiveXattrs:
         subprocess.run(["rm", "-rf", probe], check=False)
         os.makedirs(probe, exist_ok=True)
         try:
-            assert not listxattr(probe), (
-                "a fresh directory already carries bcachefs xattrs"
+            # A new directory already carries effective xattrs, because the
+            # storage sets options and every inode inherits them - that is what
+            # "effective" means. Only the stored namespace should be absent.
+            before = listxattr(probe)
+            assert not [n for n in before if n.startswith("bcachefs.")], (
+                f"a fresh directory already carries stored options: {before}"
             )
             result = subprocess.run(
                 ["setfattr", "-n", EFFECTIVE, "-v", "lz4", probe],
