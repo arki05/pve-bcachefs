@@ -186,13 +186,38 @@ pct create 123 ... --rootfs ct-fast:8     # raw+ext4 fallback, still snapshottab
 ```
 
 `patches/patch-pve-container.pl` lifts this for storages that set
-`bcachefs-subvol-rootfs 1`. The patch must be re-applied after `pve-container`
-upgrades — the package does that automatically via a dpkg trigger — and it is
-exact-match, refusing to run against unknown code.
+`bcachefs-subvol-rootfs 1`. It carries two independent changes to
+`PVE::LXC`, each applied and reverted on its own. Both must be re-applied after
+`pve-container` upgrades — the package does that automatically via a dpkg
+trigger — and both are exact-match, refusing to run against unknown code.
 
-Snapshot-mode vzdump backups of subvolume containers need a second, unrelated
+The second change stops `copy_volume`'s `rsync -X` from trying to copy
+bcachefs's internal virtual xattrs. bcachefs reports its per-inode IO options
+through `listxattr` in two namespaces:
+
+| namespace | what it is | can it be set? |
+|---|---|---|
+| `bcachefs.*` | stored — the options set on this inode | on bcachefs only |
+| `bcachefs_effective.*` | computed — the options in force after inheritance | **nowhere** |
+
+`rsync -X` reads both and tries to reproduce them on the destination, where
+`lsetxattr` returns `EOPNOTSUPP`. The transfer then aborts with exit 23 —
+after copying everything — and moving a container off bcachefs fails. Both
+namespaces are filtered: the effective one because it can never be written,
+the stored one because it describes IO policy belonging to the source
+filesystem that means nothing on the destination.
+
+This lived in
+[pct-move-volume-snapshots](https://github.com/arki05/pct-move-volume-snapshots)
+until it was recognised as a bcachefs concern rather than a move-volume one:
+it is needed with stock, unpatched `pve-container`, and fixes nothing for any
+other filesystem. If an older version of that package already applied it, this
+patch adopts it rather than duplicating it.
+
+Snapshot-mode vzdump backups of subvolume containers need a third, unrelated
 fix: upstream cannot mount snapshots of path-backed subvolumes at all, on btrfs
-or bcachefs. That lives in
+or bcachefs. That one repairs btrfs just as much, so it is not ours either — it
+lives in
 [pve-lxc-snapshot-mount](https://github.com/arki05/pve-lxc-snapshot-mount).
 
 The option is the single switch between the two layouts:

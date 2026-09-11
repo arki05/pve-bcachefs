@@ -1,62 +1,21 @@
-pve-bcachefs (0.0.5) trixie; urgency=medium
+pve-bcachefs (0.0.6) UNRELEASED; urgency=medium
 
-  * Check that a derived project id is actually free before claiming it, against
-    both the ids recorded on our own anchors and the filesystem's own quota
-    state. The derivation is a bijection within one scheme but not across a
-    change to one - an id assigned under the previous, narrower scheme could
-    collide with one this scheme derives for a different guest - and the storage
-    does not own the filesystem, so project quotas may be in use for something
-    entirely outside PVE.
+  * Take over the copy_volume virtual-xattr filter from
+    pct-move-volume-snapshots. bcachefs reports its per-inode IO options
+    through listxattr in two namespaces - bcachefs.*, which are stored and
+    settable, and bcachefs_effective.*, which are computed after inheritance
+    and cannot be set anywhere at all. rsync -X reads both and tries to
+    reproduce them on the destination, where lsetxattr returns EOPNOTSUPP, so
+    the transfer aborts with exit 23 after copying everything and moving a
+    container off bcachefs fails. Both namespaces are now filtered.
+  * The patch was never a move-volume concern: it is needed with stock,
+    unpatched pve-container, and it fixes nothing for any filesystem other than
+    bcachefs. It belongs with the plugin for the filesystem whose xattrs it
+    names, by the same rule that sent the snapshot-mount fix out to
+    pve-lxc-snapshot-mount because that one repaired btrfs too.
+  * patch-pve-container.pl now carries a series rather than a single change,
+    applying and reverting each independently, and adopts the filter if an
+    older pct-move-volume-snapshots already applied it.
 
- -- Julius Arkenberg <julius@rkenberg.de>  Thu, 10 Sep 2026 23:15:00 +0200
+ -- Julius Arkenberg <julius@rkenberg.de>  Fri, 11 Sep 2026 09:30:00 +0200
 
-pve-bcachefs (0.0.4) trixie; urgency=medium
-
-  * Project ids now reserve 8 bits for the disk index rather than 4, so the low
-    byte carries the index and the rest the vmid. 256 slots covers PVE's
-    mp0..mp255 exactly; the previous 16 was arbitrary and would have refused a
-    guest with more than sixteen volumes on one storage.
-  * Existing volumes are unaffected: the id is recorded in trusted.pve.projid
-    and read back from there, so only newly allocated volumes use the wider
-    scheme and the two coexist.
-
- -- Julius Arkenberg <julius@rkenberg.de>  Thu, 10 Sep 2026 22:30:00 +0200
-
-pve-bcachefs (0.0.3) trixie; urgency=medium
-
-  * Snapshot mounting for path-backed subvolumes moved out to the new
-    pve-lxc-snapshot-mount package and is now depended on rather than
-    duplicated. It was never bcachefs-specific - it repairs the same gap for
-    btrfs, an officially supported storage type - and carrying a copy here
-    meant two packages racing to patch one file, held apart only by a comment
-    string that happened to match.
-  * Drop APPLY_LXC_PATCH. A storage plugin that only half works is not a
-    configuration anyone wants, and the raw-image fallback already covers the
-    case where the patch cannot be applied.
-  * The patch script gains --revert, so removing the package reverses just its
-    own change instead of restoring the whole file over another package's.
-
- -- Julius Arkenberg <julius@rkenberg.de>  Thu, 10 Sep 2026 20:45:00 +0200
-
-pve-bcachefs (0.0.2) trixie; urgency=medium
-
-  * No changes to the plugin, the patch or the packaging: this release exists
-    to exercise the release pipeline end to end - build, release, dispatch to
-    the apt repository, and retention of earlier versions in the pool.
-  * Releases now trigger apt repository publishing immediately, via the
-    workflow dispatch endpoint rather than repository_dispatch, so the token
-    involved needs only the Actions permission and not push access to code.
-
- -- Julius Arkenberg <julius@rkenberg.de>  Thu, 10 Sep 2026 18:45:00 +0200
-
-pve-bcachefs (0.0.1) trixie; urgency=medium
-
-  * Initial packaged release.
-  * bcachefs storage plugin with subvolume container rootfs, native snapshots,
-    clones and rollback, and per-storage bcachefs IO options.
-  * Container size enforcement via bcachefs project quotas, with a raw-image
-    fallback where the filesystem has no project quotas.
-  * Patches PVE::LXC for sized subvolume rootfs volumes and snapshot-mode
-    vzdump, re-applied automatically after pve-container upgrades.
-
- -- Julius Arkenberg <julius@rkenberg.de>  Thu, 10 Sep 2026 12:00:00 +0200
