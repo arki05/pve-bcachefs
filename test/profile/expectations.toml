@@ -1,11 +1,20 @@
-# Known results for the bcachefs storage. Merged with the lab's own
-# expectations.toml at report time, so this plugin's known defects travel with
-# the plugin rather than living in the harness.
+# What this backend cannot do.
 #
-# kind = "known-bug"  - a real defect, tracked, tolerated while it is. If it
-#                       starts passing the entry is flagged as stale so it and
-#                       its workaround can go.
-# kind = "sanctioned" - not a defect; a documented difference between backends.
+# These are limitations, not defects: every test runs against every backend,
+# and the ones a backend genuinely cannot satisfy are declared here rather than
+# skipped. A skip would mean the test never ran and nothing said so - which is
+# how linked clones went untested on bcachefs for a whole day.
+#
+# Declared by capability marker rather than by test name, because names drift
+# and capabilities do not. If one of these starts passing it is reported as a
+# stale expectation, which is a finding: the backend gained something, or the
+# declaration was wrong to begin with.
+
+[[expected]]
+profile = "bcachefs"
+marker = "ct_resize_visible"
+kind = "limitation"
+reason = "the rootfs is a subvolume on a much larger filesystem, so df inside reports the filesystem rather than the quota - the limit is real and simply not visible from in there"
 
 [[expected]]
 profile = "bcachefs"
