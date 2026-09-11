@@ -61,18 +61,15 @@ class TestAnchoredLayout:
             f"{names} - this breaks rsync -X and every path that uses it"
         )
 
-    @pytest.mark.xfail(
-        strict=False,
-        reason="known bcachefs behaviour: the bcachefs_effective.* virtual "
-               "xattrs are reported by listxattr on every inode below one that "
-               "sets an option, so rsync -X reads them and tries to reproduce "
-               "them on the destination, where lsetxattr returns EOPNOTSUPP. "
-               "See bcachefs-findings-and-reports.md. An XPASS here means it "
-               "has been fixed and the workaround can go.",
-    )
     def test_rsync_with_xattrs_off_the_volume(self, create_ct, pve, node, storage,
                                               config, tmp_path):
-        """The concrete consequence of the effective-xattr bug.
+        """The concrete consequence of the effective-xattr behaviour.
+
+        This fails, on purpose, and is declared in the profile's
+        expectations.toml rather than marked xfail here. The declaration is
+        per-storage and carries its reason next to the plugin, and the runner
+        flags it the day it starts passing - which an inline marker cannot do
+        for a result that is only expected on one backend.
 
         PVE's own move-volume and offline migration are `rsync -X`, so this
         failing means a container cannot be moved off bcachefs - and it fails

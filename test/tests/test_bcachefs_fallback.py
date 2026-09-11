@@ -73,7 +73,7 @@ class TestRawFallback:
             ct.start()
             result = ct.exec().exec(
                 "for i in $(seq 1 30); do "
-                "  dd if=/dev/zero of=/root/fill-$i bs=1M count=64 conv=fsync "
+                "  dd if=/dev/urandom of=/root/fill-$i bs=1M count=64 conv=fsync "
                 "    status=none || exit 42; "
                 "done", timeout=600,
             )

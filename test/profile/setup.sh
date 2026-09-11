@@ -12,8 +12,11 @@ CONFIG="${LAB_TEST_CONFIG:-/root/lab-test.env}"
 NAME="${BCACHEFS_STORAGE:-lab-bcachefs}"
 MOUNT=/mnt/lab-bcachefs
 
-mapfile -t ALL_DISKS < <(ls /dev/disk/by-id/virtio-labdisk* 2>/dev/null | sort)
-[ "${#ALL_DISKS[@]}" -ge 2 ] || { echo "need at least 2 lab test disks" >&2; exit 1; }
+# The lab assigns disks; do not go looking for them. With several profiles in
+# one lab, globbing would take disks belonging to another storage.
+read -r -a ALL_DISKS <<< "${LAB_DISKS:-}"
+[ "${#ALL_DISKS[@]}" -ge 2 ] \
+    || { echo "need at least 2 disks (LAB_DISKS='${LAB_DISKS:-}')" >&2; exit 1; }
 
 # The last disk is held back for a second filesystem formatted *without*
 # project quotas. The plugin is supposed to notice and allocate a raw image
@@ -33,14 +36,14 @@ mkdir -p "$MOUNT"
 # working baseline. If a working tree was shipped, build it and install over
 # the top - otherwise the run tests whatever was released, which defeats the
 # point of running it against a branch.
-if [ -d /root/lab-source ]; then
+if [ -n "${LAB_SOURCE:-}" ] && [ -d "$LAB_SOURCE" ]; then
     echo "building pve-bcachefs from the working tree"
-    ( cd /root/lab-source && dpkg-buildpackage -us -uc -b >/tmp/build.log 2>&1 ) || {
+    ( cd "$LAB_SOURCE" && dpkg-buildpackage -us -uc -b >/tmp/build.log 2>&1 ) || {
         echo "building the plugin failed:" >&2
         tail -30 /tmp/build.log >&2
         exit 1
     }
-    deb=$(ls -t /root/*.deb 2>/dev/null | head -1)
+    deb=$(ls -t "$(dirname "$LAB_SOURCE")"/*.deb 2>/dev/null | head -1)
     [ -n "$deb" ] || { echo "no .deb produced by the build" >&2; exit 1; }
     DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
         -o DPkg::Lock::Timeout=600 --allow-downgrades "$deb"

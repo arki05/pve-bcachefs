@@ -1,0 +1,21 @@
+# Known results for the bcachefs storage. Merged with the lab's own
+# expectations.toml at report time, so this plugin's known defects travel with
+# the plugin rather than living in the harness.
+#
+# kind = "known-bug"  - a real defect, tracked, tolerated while it is. If it
+#                       starts passing the entry is flagged as stale so it and
+#                       its workaround can go.
+# kind = "sanctioned" - not a defect; a documented difference between backends.
+
+[[expected]]
+profile = "bcachefs"
+test = "*test_rsync_with_xattrs_off_the_volume*"
+kind = "known-bug"
+reason = """
+bcachefs reports bcachefs_effective.* through listxattr on every inode below
+one that sets an option. rsync -X reads them and tries to reproduce them on the
+destination, where lsetxattr returns EOPNOTSUPP, so the transfer aborts with
+exit 23. Worked around in pve-bcachefs by filtering both bcachefs namespaces
+out of copy_volume's rsync; this test exercises the unfiltered path on purpose
+so we notice if the underlying behaviour ever changes.
+"""

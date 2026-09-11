@@ -51,11 +51,16 @@ class TestQuotaEnforcement:
 
         # Well past 1 GiB, in chunks, so the failure is a write error rather
         # than a single allocation the filesystem might short-circuit.
+        # Incompressible: the storage sets compression=lz4, and a fill of
+        # zeros would measure the compressor rather than the quota. bcachefs
+        # happens to charge this quota before compression - which is why the
+        # zero fill passed here while the same test failed on ZFS - but a test
+        # that only works because of that is not testing what it claims to.
         result = guest.exec(
             "for i in $(seq 1 40); do "
-            "  dd if=/dev/zero of=/root/fill-$i bs=1M count=64 conv=fsync status=none "
-            "    || exit 42; "
-            "done", timeout=600,
+            "  dd if=/dev/urandom of=/root/fill-$i bs=1M count=64 conv=fsync "
+            "    status=none || exit 42; "
+            "done", timeout=900,
         )
         assert result["exitcode"] != 0, (
             "wrote well past the container's 1G size without hitting a limit - "
@@ -70,8 +75,13 @@ class TestQuotaEnforcement:
         _require_quota(config)
         mount = config["BCACHEFS_MOUNT"]
         ct = create_ct(start=True, disk_gb=2)
+        # Incompressible, so "128 MiB written" and "128 MiB charged" are the
+        # same question. With compressible data the two diverge on any backend
+        # that charges post-compression, and the assertion below would be
+        # measuring the compressor.
         ct.exec().run(
-            "dd if=/dev/zero of=/root/ballast bs=1M count=128 conv=fsync status=none")
+            "dd if=/dev/urandom of=/root/ballast bs=1M count=128 conv=fsync "
+            "status=none")
         ct.exec().run("sync")
 
         path = volume_path(pve, node, storage, ct.config()["rootfs"].split(",")[0])
