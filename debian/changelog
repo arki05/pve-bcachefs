@@ -9,8 +9,11 @@ pve-bcachefs (0.0.6) UNRELEASED; urgency=medium
     else, so rsync -X aborts with exit 23 after copying everything and moving
     a container off bcachefs fails. Both namespaces are now filtered:
     bcachefs.* because it describes policy belonging to the source filesystem,
-    bcachefs_effective.* because copying derived values pins what was
-    inherited as an explicit per-inode setting on every file.
+    bcachefs_effective.* because it is derived state that has no business in a
+    copy at all. A write to the effective namespace is accepted and silently
+    discarded on bcachefs itself - measured on 1.39.5, including with a value
+    other than the one in force - so a bcachefs-to-bcachefs copy is harmless
+    and the filter is load-bearing only for foreign destinations.
   * The patch was never a move-volume concern: it is needed with stock,
     unpatched pve-container, and it fixes nothing for any filesystem other than
     bcachefs. It belongs with the plugin for the filesystem whose xattrs it
