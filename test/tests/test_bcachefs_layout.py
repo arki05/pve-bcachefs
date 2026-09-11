@@ -61,50 +61,12 @@ class TestAnchoredLayout:
             f"{names} - this breaks rsync -X and every path that uses it"
         )
 
-    def test_rsync_with_xattrs_off_the_volume(self, create_ct, pve, node, storage,
-                                              config, tmp_path):
-        """What an *unfiltered* `rsync -X` off a bcachefs volume does.
-
-        Deliberately not the patched path: this runs its own rsync rather
-        than going through PVE, so it measures the filesystem rather than the
-        plugin. The patched path is covered by
-        test_rsync_succeeds_when_effective_xattrs_are_excluded and by
-        test_copy_volume_excludes_bcachefs_virtual_xattrs.
-
-        It fails on purpose, and is declared in the profile's
-        expectations.toml rather than marked xfail here. The declaration is
-        per-storage and carries its reason next to the plugin, and the runner
-        flags it the day it starts passing - which an inline marker cannot do
-        for a result that is only expected on one backend. That day is the
-        point of keeping it: PVE's own move-volume and offline migration are
-        `rsync -X`, so this is what would strand a container on bcachefs
-        without the copy_volume filter - failing late, after copying
-        everything. When it starts passing, the filter can go.
-        """
-        if config.get("BCACHEFS_PRJQUOTA") != "true":
-            pytest.skip("no project quotas")
-        ct = create_ct(start=True)
-        DataGuard(ct.exec()).seed(size_mb=2, count=2)
-        ct.stop()
-
-        src = volume_path(pve, node, storage, rootfs_volid(ct))
-        dst = "/var/tmp/rsync-xattr-check"
-        subprocess.run(["rm", "-rf", dst], check=True)
-        result = subprocess.run(
-            ["rsync", "-aHAX", "--numeric-ids", f"{src}/", dst],
-            capture_output=True, text=True, timeout=900,
-        )
-        subprocess.run(["rm", "-rf", dst], check=False)
-        assert result.returncode == 0, (
-            f"rsync -X off the volume failed (exit {result.returncode}):\n"
-            f"{result.stderr[-1500:]}"
-        )
-
     def test_rsync_succeeds_when_effective_xattrs_are_excluded(
             self, create_ct, pve, node, storage, config):
-        """The workaround, asserted separately so the bug above and its fix do
-        not share a single result. Excluding the virtual xattrs is what makes a
-        move off bcachefs work at all today."""
+        """What copy_volume does, asserted directly: excluding the virtual
+        xattrs is what makes a move off bcachefs work at all today. Without
+        the exclusions rsync aborts with exit 23 on the first foreign
+        destination, after copying everything."""
         if config.get("BCACHEFS_PRJQUOTA") != "true":
             pytest.skip("no project quotas")
         ct = create_ct(start=True)

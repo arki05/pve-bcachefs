@@ -15,16 +15,3 @@ profile = "bcachefs"
 marker = "ct_resize_visible"
 kind = "limitation"
 reason = "the rootfs is a subvolume on a much larger filesystem, so df inside reports the filesystem rather than the quota - the limit is real and simply not visible from in there"
-
-[[expected]]
-profile = "bcachefs"
-test = "*test_rsync_with_xattrs_off_the_volume*"
-kind = "known-bug"
-reason = """
-bcachefs reports bcachefs_effective.* through listxattr on every inode below
-one that sets an option. rsync -X reads them and tries to reproduce them on the
-destination, where lsetxattr returns EOPNOTSUPP, so the transfer aborts with
-exit 23. Worked around in pve-bcachefs by filtering both bcachefs namespaces
-out of copy_volume's rsync; this test exercises the unfiltered path on purpose
-so we notice if the underlying behaviour ever changes.
-"""
