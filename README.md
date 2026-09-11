@@ -195,17 +195,21 @@ The second change stops `copy_volume`'s `rsync -X` from trying to copy
 bcachefs's internal virtual xattrs. bcachefs reports its per-inode IO options
 through `listxattr` in two namespaces:
 
-| namespace | what it is | can it be set? |
-|---|---|---|
-| `bcachefs.*` | stored — the options set on this inode | on bcachefs only |
-| `bcachefs_effective.*` | computed — the options in force after inheritance | **nowhere** |
+| namespace | what it is | appears on | settable |
+|---|---|---|---|
+| `bcachefs.*` | the options set on this inode | inodes that set one | bcachefs only |
+| `bcachefs_effective.*` | the options in force after inheritance | **every** inode below one that sets any | bcachefs only |
 
 `rsync -X` reads both and tries to reproduce them on the destination, where
 `lsetxattr` returns `EOPNOTSUPP`. The transfer then aborts with exit 23 —
-after copying everything — and moving a container off bcachefs fails. Both
-namespaces are filtered: the effective one because it can never be written,
-the stored one because it describes IO policy belonging to the source
-filesystem that means nothing on the destination.
+after copying everything — and moving a container off bcachefs fails.
+
+Both are filtered, for different reasons. `bcachefs.*` describes IO policy
+belonging to the source filesystem and means nothing on the destination.
+`bcachefs_effective.*` should not be copied even *between two bcachefs
+filesystems*: the values are derived, and writing them back pins what was
+inherited as an explicit per-inode setting on every file, quietly replacing
+inheritance with thousands of individual options.
 
 This lived in
 [pct-move-volume-snapshots](https://github.com/arki05/pct-move-volume-snapshots)

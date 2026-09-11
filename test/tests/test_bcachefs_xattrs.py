@@ -2,19 +2,21 @@
 
 bcachefs reports two xattr namespaces on every inode:
 
-  bcachefs.*             stored, settable - the options set on this inode
-  bcachefs_effective.*   computed - the options actually in force, after
-                         inheritance from the parent and the filesystem
+  bcachefs.*             the options explicitly set on this inode
+  bcachefs_effective.*   the options actually in force, after inheritance -
+                         present on every inode below a directory that sets any
 
-Both are returned by listxattr. `rsync -X` therefore reads both and tries to
-reproduce them on the destination. The stored ones are legitimate; the
-effective ones are a derived view with nothing behind them to write.
+Both are returned by listxattr and both are accepted by setxattr on bcachefs;
+neither is accepted anywhere else. `rsync -X` therefore reads them and aborts
+on the first foreign destination it meets.
 
 The anchored layout already removed the stored `bcachefs.project` from volume
-roots, which is why no bcachefs.* failure appears any more. Everything that
-still breaks is bcachefs_effective.*, so these tests pin down exactly how far
-that reaches - which decides whether this is a "copying to a foreign
-filesystem" problem or something wider.
+roots, which is why no bcachefs.* failure appears any more. What still breaks
+is bcachefs_effective.*, present on every file in the tree.
+
+These tests pin down how far it reaches, because that decides what kind of bug
+it is: confined to foreign destinations, or something that also corrupts a
+bcachefs-to-bcachefs copy by turning inherited options into explicit ones.
 """
 
 import os
@@ -53,38 +55,48 @@ class TestEffectiveXattrs:
         finally:
             os.rmdir(probe)
 
-    def test_effective_xattrs_cannot_be_set_even_on_bcachefs(self, config):
-        """The crux.
+    def test_writing_an_effective_xattr_creates_a_stored_one(self, config):
+        """Measured, not assumed: the effective xattrs *are* settable on
+        bcachefs, and writing one sets the underlying option - so the inode
+        comes away with a stored `bcachefs.*` it did not have before.
 
-        If a listed xattr cannot be written back on the very filesystem that
-        reported it, then listing it is the bug - not the destination's
-        inability to accept it. It also means this is not a cross-filesystem
-        problem: any `rsync -X` that reads them breaks, bcachefs to bcachefs
-        included.
+        That is why they must not be copied even between two bcachefs
+        filesystems. An `rsync -X` reproduces the effective value of every file
+        as an explicit setting, replacing inheritance with a per-inode option
+        on everything in the tree.
         """
         mount = config["BCACHEFS_MOUNT"]
         probe = os.path.join(mount, ".xattr-setprobe")
+        subprocess.run(["rm", "-rf", probe], check=False)
         os.makedirs(probe, exist_ok=True)
         try:
+            assert not listxattr(probe), (
+                "a fresh directory already carries bcachefs xattrs"
+            )
             result = subprocess.run(
                 ["setfattr", "-n", EFFECTIVE, "-v", "lz4", probe],
                 capture_output=True, text=True)
-            if result.returncode == 0:
-                pytest.skip(
-                    "the effective xattrs are settable on bcachefs after all; "
-                    "the problem is confined to foreign destinations")
-            assert "not supported" in result.stderr.lower() \
-                or "permitted" in result.stderr.lower(), result.stderr
+            assert result.returncode == 0, (
+                f"the effective xattrs are not settable on bcachefs after all "
+                f"- the problem would then be listing them at all: "
+                f"{result.stderr}"
+            )
+            names = listxattr(probe)
+            assert "bcachefs.compression" in names, (
+                f"writing {EFFECTIVE} did not leave a stored option behind: "
+                f"{names}"
+            )
         finally:
-            os.rmdir(probe)
+            subprocess.run(["rm", "-rf", probe], check=False)
 
     @needs_lxc
     def test_rsync_bcachefs_to_bcachefs(self, create_ct, pve, node, storage, config):
         """bcachefs to bcachefs, same kind of filesystem on both ends.
 
-        If this fails, the bug is not about copying to ext4 - it breaks any
-        xattr-preserving copy of a bcachefs tree, and the workaround is needed
-        far more widely than just move-volume.
+        This passes: both namespaces are settable on bcachefs, so the copy
+        itself succeeds. It is here to keep that fact measured rather than
+        assumed - if it ever starts failing, the bug is far wider than a
+        foreign destination.
         """
         destination_mount = config.get("NOQUOTA_MOUNT")
         if not destination_mount:

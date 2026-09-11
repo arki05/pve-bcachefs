@@ -63,11 +63,12 @@ class TestAnchoredLayout:
 
     @pytest.mark.xfail(
         strict=False,
-        reason="known bcachefs bug: the bcachefs_effective.* virtual xattrs are "
-               "reported by listxattr, so rsync -X reads them and tries to "
-               "reproduce them on the destination, where lsetxattr returns "
-               "EOPNOTSUPP. See bcachefs-findings-and-reports.md. An XPASS "
-               "here means it has been fixed and the workaround can go.",
+        reason="known bcachefs behaviour: the bcachefs_effective.* virtual "
+               "xattrs are reported by listxattr on every inode below one that "
+               "sets an option, so rsync -X reads them and tries to reproduce "
+               "them on the destination, where lsetxattr returns EOPNOTSUPP. "
+               "See bcachefs-findings-and-reports.md. An XPASS here means it "
+               "has been fixed and the workaround can go.",
     )
     def test_rsync_with_xattrs_off_the_volume(self, create_ct, pve, node, storage,
                                               config, tmp_path):

@@ -2,12 +2,15 @@ pve-bcachefs (0.0.6) UNRELEASED; urgency=medium
 
   * Take over the copy_volume virtual-xattr filter from
     pct-move-volume-snapshots. bcachefs reports its per-inode IO options
-    through listxattr in two namespaces - bcachefs.*, which are stored and
-    settable, and bcachefs_effective.*, which are computed after inheritance
-    and cannot be set anywhere at all. rsync -X reads both and tries to
-    reproduce them on the destination, where lsetxattr returns EOPNOTSUPP, so
-    the transfer aborts with exit 23 after copying everything and moving a
-    container off bcachefs fails. Both namespaces are now filtered.
+    through listxattr in two namespaces - bcachefs.*, the options set on an
+    inode, and bcachefs_effective.*, the options in force after inheritance,
+    which appear on every inode below a directory that sets any. Both are
+    accepted by setxattr on bcachefs and rejected with EOPNOTSUPP everywhere
+    else, so rsync -X aborts with exit 23 after copying everything and moving
+    a container off bcachefs fails. Both namespaces are now filtered:
+    bcachefs.* because it describes policy belonging to the source filesystem,
+    bcachefs_effective.* because copying derived values pins what was
+    inherited as an explicit per-inode setting on every file.
   * The patch was never a move-volume concern: it is needed with stock,
     unpatched pve-container, and it fixes nothing for any filesystem other than
     bcachefs. It belongs with the plugin for the filesystem whose xattrs it

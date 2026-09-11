@@ -14,14 +14,19 @@
 #
 # 2. copy_volume's rsync does not try to copy bcachefs's internal virtual
 #    xattrs. bcachefs reports its per-inode IO options through listxattr in two
-#    namespaces: `bcachefs.*`, which are stored and settable, and
-#    `bcachefs_effective.*`, which are computed after inheritance and cannot be
-#    set anywhere at all. `rsync -X` reads both and tries to reproduce them on
-#    the destination, where lsetxattr returns EOPNOTSUPP - so the transfer
-#    aborts with exit 23 after copying everything, and moving a container off
-#    bcachefs fails. Both namespaces are filtered: the effective one because it
-#    can never be written, the stored one because it describes IO policy that
-#    belongs to the source filesystem and means nothing on the destination.
+#    namespaces: `bcachefs.*`, the options explicitly set on an inode, and
+#    `bcachefs_effective.*`, the options actually in force after inheritance -
+#    which appear on every inode below a directory that sets any. Both are
+#    accepted by setxattr on bcachefs and rejected with EOPNOTSUPP everywhere
+#    else, so `rsync -X` reads them and aborts the transfer with exit 23 after
+#    copying everything: moving a container off bcachefs fails.
+#
+#    Both are filtered, for different reasons. `bcachefs.*` describes IO policy
+#    belonging to the source filesystem and means nothing on the destination.
+#    `bcachefs_effective.*` should not be copied even between two bcachefs
+#    filesystems: the values are derived, and writing them back pins what was
+#    inherited as an explicit per-inode setting on every file, quietly
+#    replacing inheritance with thousands of individual options.
 #
 #    This lived in pct-move-volume-snapshots until it was recognised as a
 #    bcachefs concern rather than a move-volume one: it is needed with stock,
