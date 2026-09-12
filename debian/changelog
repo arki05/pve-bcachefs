@@ -26,6 +26,19 @@ pve-bcachefs (0.0.6) UNRELEASED; urgency=medium
     never reached. Both sites carry upstream's own TODO saying the check
     belongs in the storage layer; adding bcachefs to the lists is the local
     fix, and asking the plugin instead is the upstream one.
+  * `pct create` works on a bcachefs storage again. pct and qm run Perl with
+    -T, where a path assembled from storage.cfg is tainted and syscall(2)
+    refuses it, so every container create from the command line died with
+    "Insecure dependency in syscall while running with -T switch" while the
+    identical create through the API or the web UI succeeded - pvedaemon does
+    not run tainted. Only the project-quota path was reachable enough to hit
+    it (reading the projid xattr off the anchor), so the raw-image fallback
+    and `qm` were unaffected, which is part of why it went unnoticed. Every
+    path handed to a raw syscall is now checked and untainted, not just the
+    one that happened to fail first.
+  * The test suite drove PVE through pvesh exclusively, which is why a
+    hundred passing tests said nothing about the command line. It now creates
+    a container with `pct` and a disk with `qm` as well.
   * The patch script is patch-pve.pl now, not patch-pve-container.pl: it spans
     three files across pve-container and qemu-server. Pristine copies are kept
     per file under flattened names, since two of them are called Migrate.pm and

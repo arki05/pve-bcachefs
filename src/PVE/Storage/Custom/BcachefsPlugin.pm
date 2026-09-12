@@ -187,10 +187,30 @@ sub check_config {
         $skipSchemaCheck);
 }
 
+# Every raw syscall() below takes a path, and `pct` runs Perl in taint mode:
+# a path assembled from storage.cfg is tainted, and syscall() refuses tainted
+# arguments outright. The API path untaints earlier, which is why this only
+# ever broke the command line - `pct create` on a bcachefs storage died with
+# "Insecure dependency in syscall while running with -T switch" while the
+# identical create through pvesh succeeded.
+#
+# Untainting is a claim that the value has been checked, so this checks rather
+# than waving it through: an absolute path with no NUL in it, which is what
+# every caller here constructs and all the kernel will accept anyway.
+my sub untaint_path($) {
+    my ($path) = @_;
+    die "refusing a path that is not absolute: '$path'\n"
+        if !defined($path) || $path !~ m{^/};
+    my ($clean) = $path =~ m{^([^\0]+)$}
+        or die "refusing a path containing a NUL byte\n";
+    return $clean;
+}
+
 my sub getfsmagic($) {
     my ($path) = @_;
     # only the first field (f_type) of struct statfs is needed
     my $buf = pack('x160');
+    $path = untaint_path($path);
     if (0 != syscall(&PVE::Syscall::SYS_statfs, $path, $buf)) {
         die "statfs on '$path' failed - $!\n";
     }
@@ -220,6 +240,7 @@ my $PROJID_XATTR = 'trusted.pve.projid';
 
 my sub set_num_xattr($$$) {
     my ($path, $attr, $value) = @_;
+    $path = untaint_path($path);
     my $str = "$value";
     if (
         0 != syscall(
@@ -232,6 +253,7 @@ my sub set_num_xattr($$$) {
 
 my sub get_num_xattr($$) {
     my ($path, $attr) = @_;
+    $path = untaint_path($path);
     my $buf = pack('x32');
     my $len = syscall(&PVE::Syscall::SYS_getxattr, $path, $attr, $buf, 32);
     return undef if $len <= 0;
@@ -280,6 +302,7 @@ my sub get_size_xattr($) {
 #    looks like it works right up until something reads with an integer.
 my sub quotactl_fd($$$$) {
     my ($path, $cmd, $id, $bufref) = @_;
+    $path = untaint_path($path);
 
     sysopen(my $fh, $path, O_RDONLY | O_DIRECTORY)
         or die "failed to open '$path' - $!\n";
@@ -626,6 +649,7 @@ my sub projid_set_inherited($$) {
 
     set_projid($parent, $projid);
     my $err;
+    $volume_path = untaint_path($volume_path);
     if (0 != syscall(&PVE::Syscall::SYS_removexattr, $volume_path, 'bcachefs.project')) {
         $err = "failed to demote project id on '$volume_path' - $!\n";
     }

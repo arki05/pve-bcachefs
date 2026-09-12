@@ -191,3 +191,49 @@ class TestPackageLifecycle:
         assert "BcachefsPlugin" not in out.stderr, (
             f"the plugin failed to load:\n{out.stderr}"
         )
+
+
+@needs_lxc
+class TestCommandLine:
+    """The CLI, because the API is not the only caller.
+
+    `pct` and `qm` run Perl with -T, where anything assembled from a config
+    file is tainted and syscall() refuses it outright. pvedaemon does not, so
+    a plugin that hands a tainted path to syscall() works perfectly through
+    the API and through the web UI, and fails on the command line with
+    "Insecure dependency in syscall while running with -T switch".
+
+    The whole suite drives PVE through pvesh, so it passed a hundred tests
+    against a storage on which `pct create` could not create a container at
+    all. These go through the commands a person types.
+    """
+
+    def test_pct_create(self, pve, node, storage, ct_template):
+        vmid = pve.nextid()
+        try:
+            result = subprocess.run(
+                ["pct", "create", str(vmid), ct_template,
+                 "--rootfs", f"{storage}:2", "--hostname", "clitest",
+                 "--unprivileged", "1"],
+                capture_output=True, text=True, timeout=600)
+            assert result.returncode == 0, (
+                f"pct create failed on {storage} (exit {result.returncode}):\n"
+                f"{result.stdout[-800:]}\n{result.stderr[-800:]}")
+            assert "Insecure dependency" not in (result.stdout + result.stderr)
+        finally:
+            subprocess.run(["pct", "destroy", str(vmid), "--purge", "1"],
+                           capture_output=True, timeout=300)
+
+    def test_qm_create_a_disk(self, pve, node, storage):
+        vmid = pve.nextid()
+        try:
+            result = subprocess.run(
+                ["qm", "create", str(vmid), "--scsi0", f"{storage}:1",
+                 "--name", "clitest"],
+                capture_output=True, text=True, timeout=600)
+            assert result.returncode == 0, (
+                f"qm create failed on {storage} (exit {result.returncode}):\n"
+                f"{result.stdout[-800:]}\n{result.stderr[-800:]}")
+        finally:
+            subprocess.run(["qm", "destroy", str(vmid), "--purge", "1"],
+                           capture_output=True, timeout=300)
