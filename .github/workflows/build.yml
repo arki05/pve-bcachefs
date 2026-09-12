@@ -34,8 +34,17 @@ jobs:
           apt-get install -y --no-install-recommends \
             build-essential debhelper devscripts lintian perl
 
-      - name: Check the patch script parses
-        run: perl -c patches/patch-pve-container.pl
+      # Every patch script in the directory, so adding one cannot leave it
+      # unchecked - which is how the rename to patch-pve.pl went unnoticed:
+      # this step named a single file and started failing on a path that no
+      # longer existed.
+      - name: Check the patch scripts parse
+        run: |
+          set -eu
+          for script in patches/*.pl; do
+            echo "checking $script"
+            perl -c "$script"
+          done
 
       - name: Build
         run: dpkg-buildpackage -b -us -uc
