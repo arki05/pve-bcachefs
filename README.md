@@ -1,7 +1,16 @@
 # pve-bcachefs
 
+[![storage lab](https://img.shields.io/endpoint?url=https%3A%2F%2Farki05.github.io%2Fpve-bcachefs%2Fbadge.json)](https://arki05.github.io/pve-bcachefs/)
+
 LXC-focused bcachefs storage plugin for Proxmox VE 9 (storage APIVER 15).
 **Work in progress.**
+
+The badge counts three things rather than saying pass or fail, because pass or
+fail is the wrong question once a backend has known limitations: **passed**,
+**known issues** (declared, with a reason), and **failing** (not declared, and
+blocking). Click it for the breakdown - every known issue lists what it is and
+why it is tolerated. The tests behind it run against real Proxmox nodes under
+QEMU via [pve-storage-lab](https://github.com/arki05/pve-storage-lab).
 
 Containers live as plain bcachefs subvolumes (folders — no image files, no
 loop devices), so snapshots, rollbacks and clones are native, instant bcachefs

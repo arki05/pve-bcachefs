@@ -114,3 +114,47 @@ jobs:
       - name: Tear down
         if: always()
         run: cd "$GITHUB_WORKSPACE/lab" && ./bin/lab run --phase teardown || true
+
+  # Deliberately a separate job on a GitHub runner. The self-hosted box runs
+  # the lab and nothing else: it has no Pages credentials, no id-token, and no
+  # reason to talk to anything but the job queue.
+  publish:
+    needs: lab
+    if: always() && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - name: Fetch the results
+        uses: actions/download-artifact@v4
+        with:
+          name: storage-lab-results
+          path: site
+        continue-on-error: true
+
+      - name: Make sure there is something to publish
+        run: |
+          set -eu
+          if [ ! -f site/index.html ]; then
+            mkdir -p site
+            printf '%s\n' \
+              '<!doctype html><meta charset="utf-8">' \
+              '<title>Storage lab results</title>' \
+              '<p>The last run did not get as far as producing a report.</p>' \
+              > site/index.html
+            printf '%s\n' \
+              '{"schemaVersion":1,"label":"storage lab","message":"no report","color":"lightgrey"}' \
+              > site/badge.json
+          fi
+          ls -la site
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - id: deploy
+        uses: actions/deploy-pages@v4
