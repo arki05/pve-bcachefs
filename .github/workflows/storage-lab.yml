@@ -59,7 +59,7 @@ jobs:
         run: |
           set -euo pipefail
           rm -rf "$PVE_LAB_STATE/images" "$PVE_LAB_STATE/build" "$PVE_LAB_STATE/bake"
-          cd "$GITHUB_WORKSPACE/lab" && bash lab/build-image.sh
+          cd "$GITHUB_WORKSPACE/lab" && make image
 
       # This repository tests *this* plugin. Another backend is only worth
       # booting here as the other end of a cross-storage round trip - a zfs
