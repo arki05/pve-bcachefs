@@ -35,23 +35,10 @@ profile = "bcachefs"
 test = "*test_the_filesystem_reports_itself_clean*"
 kind = "known-bug"
 reason = """
-bcachefs records one failed data read per QEMU open of a VM disk image, always
-at offset 0, and the consistency check reads its error counters rather than
-trusting dmesg to be noticed.
-
-Measured on 1.39.5 and 1.39.6, identically: it is not compression (it happens
-with compress=none), not replication (it happens on a single device), and not
-the I/O backend (io_uring, threads and native each produce exactly one). Plain
-O_DIRECT reads of the very same file never reproduce it at any block size from
-512 to 4096 - only QEMU does, once per open. The device reports BLK_STS_INVAL,
-which is the block layer rejecting the request rather than a checksum failure,
-so this is not silent corruption: it is detected, reported, and with
-data-replicas >= 2 repaired from the other copy. On a single device it is
-logged unrecovered, and the guest still boots and runs.
-
-Declared rather than left to fail so that a *new* failure turns the run red,
-not so it can be forgotten. The test still runs every time, so the day
-bcachefs fixes it this is reported as a stale declaration. Not understood at
-the kernel level, and not to be read as a statement that VM images on bcachefs
-are safe.
+bcachefs logs one failed data read per QEMU open of a VM image, at offset 0.
+Reproduced on 1.39.5 and 1.39.6; independent of compression, replication and
+aio mode, and not reproducible with dd at any block size. Recovered with
+data-replicas >= 2, logged unrecovered on a single device. Detected and
+reported, not silent, and no test has shown data loss - but not diagnosed
+either, so this is not a statement that VM images are safe.
 """
