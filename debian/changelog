@@ -1,51 +1,36 @@
 pve-bcachefs (0.0.6) UNRELEASED; urgency=medium
 
   * Take over the copy_volume virtual-xattr filter from
-    pct-move-volume-snapshots. bcachefs reports its per-inode IO options
-    through listxattr in two namespaces - bcachefs.*, the options set on an
-    inode, and bcachefs_effective.*, the options in force after inheritance,
-    which appear on every inode below a directory that sets any. Both are
-    accepted by setxattr on bcachefs and rejected with EOPNOTSUPP everywhere
-    else, so rsync -X aborts with exit 23 after copying everything and moving
-    a container off bcachefs fails. Both namespaces are now filtered:
-    bcachefs.* because it describes policy belonging to the source filesystem,
-    bcachefs_effective.* because it is derived state that has no business in a
-    copy at all.
-  * The patch was never a move-volume concern: it is needed with stock,
-    unpatched pve-container, and it fixes nothing for any filesystem other than
-    bcachefs. It belongs with the plugin for the filesystem whose xattrs it
-    names, by the same rule that sent the snapshot-mount fix out to
-    pve-lxc-snapshot-mount because that one repaired btrfs too.
-  * Container and VM migration accept bcachefs volumes. Both migration paths
-    decide whether a local volume can move by consulting a hardcoded list of
-    storage types - dir, btrfs, zfspool, lvmthin, lvm - that no third-party
-    plugin can join, so migrating any bcachefs guest failed with "storage type
-    'bcachefs' not supported". Nothing was missing from the plugin: PVE's own
-    Plugin.pm already exports a subvolume as tar+size, which is exactly the
-    format a bcachefs container volume uses, and the export path was simply
-    never reached. Both sites carry upstream's own TODO saying the check
-    belongs in the storage layer; adding bcachefs to the lists is the local
-    fix, and asking the plugin instead is the upstream one.
+    pct-move-volume-snapshots. bcachefs lists its IO options through listxattr
+    in two namespaces, and every other filesystem rejects both with EOPNOTSUPP,
+    so rsync -X aborts with exit 23 and moving a container off bcachefs fails.
+    Both are now filtered.
+  * The filter belongs here, not in pct-move-volume-snapshots: it is needed
+    with stock pve-container and fixes nothing for any other filesystem.
+  * Container and VM migration accept bcachefs volumes. Both paths decide
+    whether a local volume can move from a hardcoded list of storage types that
+    no third-party plugin can join, so any bcachefs guest failed with "storage
+    type 'bcachefs' not supported". Nothing was missing from the plugin - PVE
+    already exports a subvolume as tar+size - the export path was never
+    reached. Both sites carry upstream's TODO saying the check belongs in the
+    storage layer.
   * `pct create` works on a bcachefs storage again. pct and qm run Perl with
-    -T, where a path assembled from storage.cfg is tainted and syscall(2)
-    refuses it, so every container create from the command line died with
-    "Insecure dependency in syscall while running with -T switch" while the
-    identical create through the API or the web UI succeeded - pvedaemon does
-    not run tainted. Only the project-quota path was reachable enough to hit
-    it (reading the projid xattr off the anchor), so the raw-image fallback
-    and `qm` were unaffected, which is part of why it went unnoticed. Every
-    path handed to a raw syscall is now checked and untainted, not just the
-    one that happened to fail first.
-  * The test suite drove PVE through pvesh exclusively, which is why a
-    hundred passing tests said nothing about the command line. It now creates
-    a container with `pct` and a disk with `qm` as well.
-  * The patch script is patch-pve.pl now, not patch-pve-container.pl: it spans
+    -T, where a path from storage.cfg is tainted and syscall(2) refuses it,
+    while pvedaemon does not - so the CLI died with "Insecure dependency in
+    syscall" while the API and web UI worked. Every path handed to a raw
+    syscall is now validated and untainted, not just the one that failed first.
+  * Only the project-quota path reached that syscall, so `qm` and the
+    raw-image fallback were unaffected. Part of why it went unnoticed.
+  * The test suite drove PVE through pvesh alone, so a hundred passing tests
+    said nothing about the command line. It now also creates a container with
+    `pct` and a disk with `qm`.
+  * The patch script is patch-pve.pl, not patch-pve-container.pl: it spans
     three files across pve-container and qemu-server. Pristine copies are kept
-    per file under flattened names, since two of them are called Migrate.pm and
-    LXC.pm in different directories.
-  * patch-pve.pl now carries a series rather than a single change,
-    applying and reverting each independently, and adopts the filter if an
-    older pct-move-volume-snapshots already applied it.
+    under flattened names, since two of them are Migrate.pm and LXC.pm in
+    different directories.
+  * patch-pve.pl carries a series rather than a single change, applying and
+    reverting each independently, and adopts the filter if an older
+    pct-move-volume-snapshots already applied it.
 
  -- Julius Arkenberg <julius@rkenberg.de>  Fri, 11 Sep 2026 09:30:00 +0200
 
