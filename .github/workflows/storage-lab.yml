@@ -10,9 +10,11 @@ on:
     branches: [master]
   workflow_dispatch:
     inputs:
-      profiles:
-        description: "Space-separated profile names to test"
-        default: "bcachefs"
+      pair_with:
+        description: >-
+          Extra storages to pair bcachefs against for the cross-storage round
+          trips, space separated, e.g. "zfs btrfs". Empty runs bcachefs alone.
+        default: ""
       pytest_args:
         description: "Extra pytest arguments, e.g. -k Quota"
         default: ""
@@ -33,7 +35,7 @@ jobs:
     env:
       PVE_LAB_STATE: /home/runner/lab-state
       LAB: /home/runner/pve-storage-lab
-      PROFILES: ${{ github.event.inputs.profiles || 'bcachefs' }}
+      PAIR_WITH: ${{ github.event.inputs.pair_with || '' }}
       PYTEST_ARGS: ${{ github.event.inputs.pytest_args || '' }}
 
     steps:
@@ -59,39 +61,32 @@ jobs:
             cd "$GITHUB_WORKSPACE/lab" && make image
           fi
 
+      # This repository tests *this* plugin. Another backend is only worth
+      # booting here as the other end of a cross-storage round trip - a zfs
+      # suite run in the pve-bcachefs repo would take an hour to tell us
+      # nothing about pve-bcachefs. So extra storages add pairs, never their
+      # own suite.
       - name: Prepare the lab
         run: |
           set -euo pipefail
-          args=()
-          for p in $PROFILES; do
-            if [ "$p" = bcachefs ]; then
-              args+=(--profile-dir "$GITHUB_WORKSPACE/plugin/test/profile")
-            else
-              args+=(--profile-dir "$GITHUB_WORKSPACE/lab/profiles/$p")
-            fi
+          args=(--profile-dir "$GITHUB_WORKSPACE/plugin/test/profile")
+          for p in $PAIR_WITH; do
+            args+=(--profile-dir "$GITHUB_WORKSPACE/lab/profiles/$p")
           done
+          [ -n "$PAIR_WITH" ] && args+=(--cross)
           cd "$GITHUB_WORKSPACE/lab"
           # Two nodes: migration is the only thing that needs them, and it is
           # the part of a storage plugin most likely to be quietly missing.
           ./bin/lab run "${args[@]}" --nodes 2 --disk-size 6G --phase prepare
 
-      # One step per storage, so a red step names the backend that broke rather
-      # than burying it in a combined log.
+      # Separate steps, so a red step names what broke rather than burying it
+      # in a combined log.
       - name: Suite - bcachefs
-        if: contains(env.PROFILES, 'bcachefs')
         run: cd "$GITHUB_WORKSPACE/lab" && ./bin/lab run --phase suite --only bcachefs -- $PYTEST_ARGS
 
-      - name: Suite - zfs
-        if: contains(env.PROFILES, 'zfs')
-        run: cd "$GITHUB_WORKSPACE/lab" && ./bin/lab run --phase suite --only zfs -- $PYTEST_ARGS
-
-      - name: Suite - btrfs
-        if: contains(env.PROFILES, 'btrfs')
-        run: cd "$GITHUB_WORKSPACE/lab" && ./bin/lab run --phase suite --only btrfs -- $PYTEST_ARGS
-
-      - name: Suite - lvm-thin
-        if: contains(env.PROFILES, 'lvm-thin')
-        run: cd "$GITHUB_WORKSPACE/lab" && ./bin/lab run --phase suite --only lvm-thin -- $PYTEST_ARGS
+      - name: Suite - cross-storage round trips
+        if: env.PAIR_WITH != ''
+        run: cd "$GITHUB_WORKSPACE/lab" && ./bin/lab run --phase suite --only cross -- $PYTEST_ARGS
 
       # Always: a suite that failed is exactly when the verdict matters. The
       # exit status here comes from *unexpected* failures only, so a backend's
