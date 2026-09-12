@@ -48,6 +48,17 @@ jobs:
           repository: arki05/pve-storage-lab
           path: lab
 
+      # The base image is a ~10 minute unattended PVE install. It is reused by
+      # every run, so this only pays on a runner that has never built one.
+      - name: Build the base image if the runner has none
+        run: |
+          set -euo pipefail
+          if [ -f "$PVE_LAB_STATE/images/pve-9.2-1-base.qcow2" ]; then
+            echo "base image present, reusing it"
+          else
+            cd "$GITHUB_WORKSPACE/lab" && make image
+          fi
+
       - name: Prepare the lab
         run: |
           set -euo pipefail
@@ -60,25 +71,27 @@ jobs:
             fi
           done
           cd "$GITHUB_WORKSPACE/lab"
-          bash run.sh "${args[@]}" --phase prepare
+          # Two nodes: migration is the only thing that needs them, and it is
+          # the part of a storage plugin most likely to be quietly missing.
+          ./bin/lab run "${args[@]}" --nodes 2 --disk-size 6G --phase prepare
 
       # One step per storage, so a red step names the backend that broke rather
       # than burying it in a combined log.
       - name: Suite - bcachefs
         if: contains(env.PROFILES, 'bcachefs')
-        run: cd "$GITHUB_WORKSPACE/lab" && bash run.sh --phase suite --only bcachefs -- $PYTEST_ARGS
+        run: cd "$GITHUB_WORKSPACE/lab" && ./bin/lab run --phase suite --only bcachefs -- $PYTEST_ARGS
 
       - name: Suite - zfs
         if: contains(env.PROFILES, 'zfs')
-        run: cd "$GITHUB_WORKSPACE/lab" && bash run.sh --phase suite --only zfs -- $PYTEST_ARGS
+        run: cd "$GITHUB_WORKSPACE/lab" && ./bin/lab run --phase suite --only zfs -- $PYTEST_ARGS
 
       - name: Suite - btrfs
         if: contains(env.PROFILES, 'btrfs')
-        run: cd "$GITHUB_WORKSPACE/lab" && bash run.sh --phase suite --only btrfs -- $PYTEST_ARGS
+        run: cd "$GITHUB_WORKSPACE/lab" && ./bin/lab run --phase suite --only btrfs -- $PYTEST_ARGS
 
       - name: Suite - lvm-thin
         if: contains(env.PROFILES, 'lvm-thin')
-        run: cd "$GITHUB_WORKSPACE/lab" && bash run.sh --phase suite --only lvm-thin -- $PYTEST_ARGS
+        run: cd "$GITHUB_WORKSPACE/lab" && ./bin/lab run --phase suite --only lvm-thin -- $PYTEST_ARGS
 
       # Always: a suite that failed is exactly when the verdict matters. The
       # exit status here comes from *unexpected* failures only, so a backend's
@@ -86,7 +99,7 @@ jobs:
       # something new breaks.
       - name: Report
         if: always()
-        run: cd "$GITHUB_WORKSPACE/lab" && bash run.sh --phase report
+        run: cd "$GITHUB_WORKSPACE/lab" && ./bin/lab run --phase report
 
       - name: Collect results
         if: always()
@@ -100,4 +113,4 @@ jobs:
 
       - name: Tear down
         if: always()
-        run: cd "$GITHUB_WORKSPACE/lab" && bash run.sh --phase teardown || true
+        run: cd "$GITHUB_WORKSPACE/lab" && ./bin/lab run --phase teardown || true
