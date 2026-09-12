@@ -50,16 +50,16 @@ jobs:
           repository: arki05/pve-storage-lab
           path: lab
 
-      # The base image is a ~10 minute unattended PVE install. It is reused by
-      # every run, so this only pays on a runner that has never built one.
-      - name: Build the base image if the runner has none
+      # Always built, never reused. A base image carries whatever the
+      # distribution shipped the day it was made, and a variant carries a DKMS
+      # module built against that kernel - reusing them means a run can pass
+      # against packages nobody has shipped for weeks. The ISO is kept, since
+      # it is a fixed release; everything derived from it is not.
+      - name: Build the base image
         run: |
           set -euo pipefail
-          if [ -f "$PVE_LAB_STATE/images/pve-9.2-1-base.qcow2" ]; then
-            echo "base image present, reusing it"
-          else
-            cd "$GITHUB_WORKSPACE/lab" && make image
-          fi
+          rm -rf "$PVE_LAB_STATE/images" "$PVE_LAB_STATE/build" "$PVE_LAB_STATE/bake"
+          cd "$GITHUB_WORKSPACE/lab" && make image
 
       # This repository tests *this* plugin. Another backend is only worth
       # booting here as the other end of a cross-storage round trip - a zfs
@@ -109,3 +109,10 @@ jobs:
       - name: Tear down
         if: always()
         run: cd "$GITHUB_WORKSPACE/lab" && ./bin/lab run --phase teardown || true
+
+      - name: Discard the images
+        if: always()
+        run: |
+          rm -rf "$PVE_LAB_STATE/images" "$PVE_LAB_STATE/build" \
+                 "$PVE_LAB_STATE/bake" "$PVE_LAB_STATE/labs"
+          du -sh "$PVE_LAB_STATE" 2>/dev/null || true
