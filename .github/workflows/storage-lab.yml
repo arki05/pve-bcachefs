@@ -81,12 +81,24 @@ jobs:
 
       # Separate steps, so a red step names what broke rather than burying it
       # in a combined log.
+      #
+      # pytest exits non-zero whenever a test failed, declared or not, so
+      # letting that fail the step makes the job red on a run whose verdict is
+      # "nothing new broke". Report is the gate. Exit 1 is "tests failed" and
+      # is left to it; anything else - an ssh death at 255, an interrupt at 2 -
+      # is the lab breaking rather than a backend, and still stops the job.
       - name: Suite - bcachefs
-        run: cd "$GITHUB_WORKSPACE/lab" && ./bin/lab run --phase suite --only bcachefs -- $PYTEST_ARGS
+        run: |
+          cd "$GITHUB_WORKSPACE/lab"
+          set +e; ./bin/lab run --phase suite --only bcachefs -- $PYTEST_ARGS; rc=$?; set -e
+          [ "$rc" -le 1 ] || exit "$rc"
 
       - name: Suite - cross-storage round trips
         if: env.PAIR_WITH != ''
-        run: cd "$GITHUB_WORKSPACE/lab" && ./bin/lab run --phase suite --only cross -- $PYTEST_ARGS
+        run: |
+          cd "$GITHUB_WORKSPACE/lab"
+          set +e; ./bin/lab run --phase suite --only cross -- $PYTEST_ARGS; rc=$?; set -e
+          [ "$rc" -le 1 ] || exit "$rc"
 
       # Always: a suite that failed is exactly when the verdict matters. The
       # exit status here comes from *unexpected* failures only, so a backend's
