@@ -1,4 +1,4 @@
-pve-bcachefs (0.0.6) UNRELEASED; urgency=medium
+pve-bcachefs (0.1.0) stable; urgency=medium
 
   * Take over the copy_volume virtual-xattr filter from
     pct-move-volume-snapshots. bcachefs lists its IO options through listxattr
@@ -24,6 +24,13 @@ pve-bcachefs (0.0.6) UNRELEASED; urgency=medium
   * The test suite drove PVE through pvesh alone, so a hundred passing tests
     said nothing about the command line. It now also creates a container with
     `pct` and a disk with `qm`.
+  * Continuous testing against a two-node cluster built from scratch under
+    QEMU, via pve-storage-lab, with the plugin compiled from the working tree
+    on every push: 108 passing, 3 declared limitations.
+  * Known limitations are declared rather than skipped, so each still runs and
+    is reported the day it starts passing: a container's df shows the
+    filesystem rather than its quota, a guest with snapshots cannot migrate,
+    and bcachefs logs one failed data read per QEMU open of a VM image.
   * The patch script is patch-pve.pl, not patch-pve-container.pl: it spans
     three files across pve-container and qemu-server. Pristine copies are kept
     under flattened names, since two of them are Migrate.pm and LXC.pm in
@@ -32,5 +39,5 @@ pve-bcachefs (0.0.6) UNRELEASED; urgency=medium
     reverting each independently, and adopts the filter if an older
     pct-move-volume-snapshots already applied it.
 
- -- Julius Arkenberg <julius@rkenberg.de>  Fri, 11 Sep 2026 09:30:00 +0200
+ -- Julius Arkenberg <julius@rkenberg.de>  Sun, 13 Sep 2026 15:39:13 +0200
 

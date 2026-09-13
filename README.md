@@ -314,10 +314,17 @@ cannot do this).
 VM lifecycle: create, live snapshot with vmstate, rollback with RAM restore,
 full clone, template + linked clone, resize, destroy.
 
-Additionally the [pve-storage-test-lab](https://github.com/arki05/pve-storage-test-lab)
-pytest suite passes clean (44 passed, 11 skipped = multi-node/shared-only):
-lifecycle, snapshot semantics, resize, storage moves, backup/restore
-compositions, data integrity under fio load, regressions.
+### Continuous — PVE 9.2.11, bcachefs 1.39.6, storage APIVER 15
+
+Every push to master runs the
+[pve-storage-lab](https://github.com/arki05/pve-storage-lab) suite against a
+two-node cluster built from scratch under QEMU, with the plugin compiled from
+the working tree: **108 passed, 3 known limitations**. Lifecycle, snapshots
+(including vmstate with RAM restore), clones and linked clones, resize, moves
+between storages, offline and live migration, backup and restore, durability
+across hard stops, size enforcement, data integrity under verified fio, the
+`pct`/`qm` command line as distinct from the API, and all three QEMU aio
+backends.
 
 ## Size enforcement
 
@@ -386,6 +393,38 @@ Three consequences of how bcachefs implements this:
 
 Without the option, sizes are enforced by the raw image and none of the above
 applies.
+
+## Known limitations
+
+These are declared in `test/profile/expectations.toml`, so the suite still runs
+every one of them and reports it the day it starts passing.
+
+**A container's `df` shows the filesystem, not its quota.** The size is
+enforced — writing past it fails — but `statfs` reports the whole filesystem,
+so `df` inside the container, the PVE summary and anything else reading
+`statvfs` show the pool. bcachefs has no project-aware `statfs`; XFS does
+(`xfs_fs_statfs` substitutes the project's limits, which is what makes Docker's
+`overlay2` + `xfs` quota show correctly), so this is a bcachefs feature
+request rather than something the plugin can fix. `bcachefs-subvol-rootfs 0`
+allocates a raw image instead, where `df` is accurate, at the cost of reflink
+clones and subvolume snapshots.
+
+**A guest with snapshots cannot be migrated.** A VM disk is a raw image and a
+container rootfs is a subvolume, so the plugin inherits `raw+size` and
+`tar+size` — neither has anywhere to put a snapshot. PVE checks before it
+starts and refuses with `non-migratable snapshot exists` rather than dropping
+them silently, which is the right failure. Carrying them would need a
+send/receive stream format. Every backend without one behaves the same way,
+lvm-thin included.
+
+**bcachefs logs one failed data read per QEMU open of a VM image**, at offset
+0. Reproduced on 1.39.5 and 1.39.6, and independent of compression,
+replication and aio mode; plain `O_DIRECT` reads of the same file never
+reproduce it at any block size. With `data-replicas >= 2` it is repaired from
+the other copy; on a single device it is logged unrecovered. It is detected and
+reported rather than silent, and no test has shown data loss — but it is not
+diagnosed, and should not be read as a statement that VM images on bcachefs are
+safe.
 
 ## Not (yet) supported
 - send/receive-based migration (bcachefs has none; falls back to tar/rsync)
